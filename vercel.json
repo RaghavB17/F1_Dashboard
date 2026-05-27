@@ -1,6 +1,10 @@
 {
-    "rewrites": [
-      { "source": "/", "destination": "/f1_live_dashboard.html" }
-    ],
-    "cleanUrls": true
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "routes": [
+      {
+        "handle": "filesystem"
+      }
+    ]
   }
+  
