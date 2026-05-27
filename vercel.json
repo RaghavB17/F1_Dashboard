@@ -2,8 +2,5 @@
     "rewrites": [
       { "source": "/", "destination": "/f1_live_dashboard.html" }
     ],
-    "cleanUrls": true,
-    "static": {
-      "public": "public"
-    }
+    "cleanUrls": true
   }
