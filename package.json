@@ -1,0 +1,24 @@
+{
+  "name": "f1-dashboard",
+  "version": "1.0.0",
+  "description": "Live F1 2026 Dashboard - The Pit Wall",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "mkdir -p assets/js && cp node_modules/@vercel/analytics/dist/index.mjs assets/js/vercel-analytics.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RaghavB17/F1_Dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RaghavB17/F1_Dashboard/issues"
+  },
+  "homepage": "https://github.com/RaghavB17/F1_Dashboard#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
