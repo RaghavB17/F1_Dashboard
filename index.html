@@ -2683,7 +2683,7 @@ const API_URL = (function () {
   const m = document.querySelector('meta[name="pit-wall-api"]');
   if (m && m.content) return m.content;
   const host = location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return 'https://f1.anirudhgoel.xyz/api/standings';
+  if (host === 'localhost' || host === '127.0.0.1') return '/api/standings';
   return '/api/standings';
 })();
 const STORAGE_KEY = 'pit-wall:v1';
@@ -3417,7 +3417,7 @@ function closeOnboarding(cfg) {
 let pollTimer = null;
 async function fetchAndRender(cfg) {
   try {
-    const r = await fetch('https://f1.anirudhgoel.xyz/api/standings', { headers: { 'accept': 'application/json' } });
+    const r = await fetch('/api/standings', { headers: { 'accept': 'application/json' } });
     if (!r.ok) throw new Error('http ' + r.status);
     const data = await r.json();
     window.__latestData = data;
@@ -3458,7 +3458,7 @@ function renderAll(data, cfg) {
 let liveTimer = null;
 async function fetchLive() {
   try {
-    const r = await fetch('https://f1.anirudhgoel.xyz/api/live');
+    const r = await fetch('/api/live');
     if (!r.ok) return;
     const data = await r.json();
     const sec = $('livegridSection');
@@ -3756,7 +3756,7 @@ async function subscribeToPush() {
       });
     }
     const cfg = loadConfig() || {};
-    await fetch('https://f1.anirudhgoel.xyz/api/push/subscribe', {
+    await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ subscription: sub, name: cfg.name || '', driver: cfg.driverCode || '' }),
@@ -3956,7 +3956,7 @@ async function renderSpotlight(data, cfg) {
     if (cached && (Date.now() - cached.fetched_at) < 30 * 60 * 1000) {
       info = cached.data;
     } else {
-      const r = await fetch(`https://f1.anirudhgoel.xyz/api/driver/${encodeURIComponent(code)}`);
+      const r = await fetch(`/api/driver/${encodeURIComponent(code)}`);
       if (!r.ok) throw new Error('http ' + r.status);
       info = await r.json();
       __spotlightCache[code] = { data: info, fetched_at: Date.now() };
