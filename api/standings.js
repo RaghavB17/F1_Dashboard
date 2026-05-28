@@ -73,6 +73,7 @@ export default async function handler(req, res) {
           circuit_id: r.Circuit?.circuitId || '',
           short_name: (r.raceName || '').replace(' Grand Prix', ''),
           start_utc: raceDate.toISOString(),
+          date: r.date, // <--- BUG FIX: Added missing date property here
           status: raceDate > now ? 'upcoming' : 'done'
         };
       });
@@ -133,9 +134,16 @@ export default async function handler(req, res) {
         };
       }
   
-      res.status(200).json({ drivers, constructors, schedule, next_race, last_race });
+      // Include _fetched_at_utc so the top right indicator works
+      res.status(200).json({ 
+        drivers, 
+        constructors, 
+        schedule, 
+        next_race, 
+        last_race,
+        _fetched_at_utc: new Date().toISOString()
+      });
     } catch (error) {
-      // If something crashes, return a 500 error so we can debug it
       res.status(500).json({ error: error.message });
     }
   }
