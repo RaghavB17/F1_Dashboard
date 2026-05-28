@@ -2670,6 +2670,9 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
 <div class="footer-wrap">
   <footer class="footer">
     <div class="f-note" id="fNote">Lights out and away we go</div>
+    <a href="mailto:work.raghavbuchaa@gmail.com">
+      <button type="button">Reach Out</button>
+    </a>
     <div class="f-brand">The <em>Pit Wall</em></div>
   </footer>
 </div>
@@ -2842,7 +2845,7 @@ function paintHeader(cfg) {
   const M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   $('dateline').textContent = `${D[now.getDay()]} · ${pad(now.getDate())} ${M[now.getMonth()]} · ${now.getFullYear()}`;
   $('heroLine1').textContent = name ? `${name}'s` : 'Your';
-  $('fNote').textContent = name ? `For ${name} · Lights out and away we go` : 'Lights out and away we go';
+  $('fNote').textContent = name ? `By Raghav Bucha · Lights out and away we go` : 'Lights out and away we go';
   document.title = `${name ? `${name}'s ` : ''}Pit Wall · Live F1 2026 Dashboard`;
 }
 
@@ -3708,10 +3711,10 @@ async function buildShareCard() {
 
   ctx.fillStyle = accent;
   ctx.font = '700 24px "JetBrains Mono", monospace';
-  ctx.fillText('f1.anirudhgoel.xyz', W / 2, H - 110);
+  ctx.fillText('f1-dashboard-rb.vercel.app', W / 2, H - 110);
   ctx.fillStyle = '#f2ece088';
   ctx.font = '500 18px "JetBrains Mono", monospace';
-  ctx.fillText('built by @anirudh.nocode  ·  yours forever', W / 2, H - 75);
+  ctx.fillText('built by @raghav_bucha  ·  yours forever', W / 2, H - 75);
 
   return new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png', 0.95));
 }
@@ -3722,7 +3725,7 @@ async function shareMyCard() {
   const file = new File([blob], 'pit-wall-card.png', { type: 'image/png' });
   if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'My Pit Wall', text: 'F1 2026 dashboard · pit wall · f1.anirudhgoel.xyz' });
+      await navigator.share({ files: [file], title: 'My Pit Wall', text: 'F1 2026 dashboard · pit wall · f1-dashboard-rb.vercel.app' });
       return;
     } catch {}
   }
