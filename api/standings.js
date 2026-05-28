@@ -14,13 +14,18 @@ export default async function handler(req, res) {
         }
       };
   
-      // Fetch all 5 data feeds concurrently for maximum speed
-      const [driversData, consData, schedData, lastRaceData, qualiData] = await Promise.all([
+      // Fetch all 7 data feeds concurrently (Jolpica + OpenF1)
+      const [
+        driversData, consData, schedData, lastRaceData, qualiData, 
+        openf1Weather, openf1Stints
+      ] = await Promise.all([
         fetchJson('https://api.jolpi.ca/ergast/f1/current/driverStandings.json'),
         fetchJson('https://api.jolpi.ca/ergast/f1/current/constructorStandings.json'),
         fetchJson('https://api.jolpi.ca/ergast/f1/current.json'),
         fetchJson('https://api.jolpi.ca/ergast/f1/current/last/results.json'),
-        fetchJson('https://api.jolpi.ca/ergast/f1/current/last/qualifying.json')
+        fetchJson('https://api.jolpi.ca/ergast/f1/current/last/qualifying.json'),
+        fetchJson('https://api.openf1.org/v1/weather?session_key=latest'),
+        fetchJson('https://api.openf1.org/v1/stints?session_key=latest')
       ]);
   
       // Safety checks for deep JSON trees
@@ -73,16 +78,71 @@ export default async function handler(req, res) {
           circuit_id: r.Circuit?.circuitId || '',
           short_name: (r.raceName || '').replace(' Grand Prix', ''),
           start_utc: raceDate.toISOString(),
-          date: r.date, // <--- BUG FIX: Added missing date property here
+          date: r.date,
           status: raceDate > now ? 'upcoming' : 'done'
         };
       });
       const next_race = schedule.find(r => r.status === 'upcoming') || null;
   
-      // 4. Parse Last Race Details & Qualifying
-      let last_race = null;
+      // 4. Parse OpenF1 Telemetry (Weather & Tire Stints)
+      let weather = null;
+      let stints = null;
+  
+      if (openf1Weather && openf1Weather.length > 0) {
+        // OpenF1 pushes weather updates every minute. We grab the very last entry in the array.
+        const w = openf1Weather[openf1Weather.length - 1];
+        weather = {
+          air_temp: w.air_temperature,
+          track_temp: w.track_temperature,
+          humidity: w.humidity,
+          rain_pct: w.rainfall === 1 ? 100 : 0
+        };
+      }
+  
       const lastRaceResults = getRaces(lastRaceData)[0];
-      
+  
+      if (openf1Stints && openf1Stints.length > 0 && lastRaceResults) {
+        const driverMap = {};
+        let maxLap = 1;
+        
+        // Group raw OpenF1 stint array by driver_number
+        openf1Stints.forEach(s => {
+          if (!driverMap[s.driver_number]) driverMap[s.driver_number] = [];
+          const lapStart = s.lap_start || 1;
+          const lapEnd = s.lap_end || lapStart;
+          const laps = lapEnd - lapStart + 1;
+          if (lapEnd > maxLap) maxLap = lapEnd;
+  
+          driverMap[s.driver_number].push({
+            compound: (s.compound || 'unknown').toLowerCase(),
+            lap_start: lapStart,
+            lap_end: lapEnd,
+            laps: laps > 0 ? laps : 1
+          });
+        });
+  
+        // Map OpenF1 tire data to the Top 10 Finishers from Jolpica
+        const stintDrivers = (lastRaceResults.Results || []).slice(0, 10).map(r => {
+          const dNum = parseInt(r.number);
+          const sData = driverMap[dNum] || [];
+          return {
+            num: dNum,
+            code: r.Driver?.code || '',
+            driver: `${(r.Driver?.givenName || '').charAt(0)}. ${r.Driver?.familyName || ''}`,
+            stints: sData.sort((a,b) => a.lap_start - b.lap_start)
+          };
+        }).filter(d => d.stints.length > 0);
+  
+        if (stintDrivers.length > 0) {
+          stints = {
+            total_laps: maxLap,
+            drivers: stintDrivers
+          };
+        }
+      }
+  
+      // 5. Build Last Race Package (Podium, FL, Quali, plus our new OpenF1 data)
+      let last_race = null;
       if (lastRaceResults) {
         const podium = (lastRaceResults.Results || []).slice(0, 3).map(r => ({
           driver: `${(r.Driver?.givenName || '').charAt(0)}. ${r.Driver?.familyName || ''}`,
@@ -100,7 +160,6 @@ export default async function handler(req, res) {
           lap: flResult.FastestLap.lap || ''
         } : null;
   
-        // Qualifying
         let qualifying = null;
         const qualiRace = getRaces(qualiData)[0];
         if (qualiRace && qualiRace.QualifyingResults && qualiRace.QualifyingResults.length > 0) {
@@ -110,7 +169,7 @@ export default async function handler(req, res) {
               driver_short: `${(p1.Driver?.givenName || '').charAt(0)}. ${p1.Driver?.familyName || ''}`,
               time: p1.Q3 || p1.Q2 || p1.Q1 || ''
             },
-            results: qualiRace.QualifyingResults.slice(0, 5).map(q => ({
+            results: qualiRace.QualifyingResults.map(q => ({
               pos: parseInt(q.position) || 0,
               driver_short: `${(q.Driver?.givenName || '').charAt(0)}. ${q.Driver?.familyName || ''}`,
               team_id: (q.Constructor?.constructorId || '').replace(/\s+/g, '_').toLowerCase(),
@@ -129,12 +188,11 @@ export default async function handler(req, res) {
           podium,
           fastest_lap,
           qualifying,
-          weather: null,
-          stints: null
+          weather,     // <--- Injected OpenF1 Weather
+          stints       // <--- Injected OpenF1 Tire Stints
         };
       }
   
-      // Include _fetched_at_utc so the top right indicator works
       res.status(200).json({ 
         drivers, 
         constructors, 

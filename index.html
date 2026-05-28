@@ -2945,7 +2945,7 @@ function buildWinnersMap(data) {
 
 function renderDrivers(data, cfg) {
   const list = $('driversList');
-  const drivers = (data.drivers || []).slice(0, 10);
+  const drivers = (data.drivers || []);
   if (!drivers.length) { list.innerHTML = ''; return; }
   $('driversSub').textContent = `Top ${drivers.length} · ${(data.schedule || []).filter(r=>r.status==='done').length} rounds in`;
   const base = window.__firstRender ? 0.4 : 0;
