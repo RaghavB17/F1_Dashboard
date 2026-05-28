@@ -1869,6 +1869,26 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   .quali-body .qh-q1, .quali-body .qh-q2, .qr-row .qr-q1, .qr-row .qr-q2 { display: none; }
 }
 
+.footer-btn {
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 0.6em 1.6em;
+  font-size: 1em;
+  font-family: inherit;
+  cursor: pointer;
+  margin: 1em 0;
+  transition: background 0.2s, color 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.footer-btn:hover,
+.footer-btn:focus {
+  background: #e10600;
+  color: #fff;
+  outline: none;
+}
+
 /* ================================================================
    ONBOARDING · cinematic editorial overlay · v2
    ================================================================ */
@@ -2675,7 +2695,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   <footer class="footer">
     <div class="f-note" id="fNote">Lights out and away we go</div>
     <a href="mailto:work.raghavbuchaa@gmail.com">
-      <button type="button">Reach Out</button>
+      <button type="button" class="footer-btn">Reach Out</button>
     </a>
     <div class="f-brand">The <em>Pit Wall</em></div>
   </footer>
