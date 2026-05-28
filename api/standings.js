@@ -3,7 +3,6 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=3600');
   
     try {
-      // Helper function to safely fetch JSON without crashing on 404s
       const fetchJson = async (url) => {
         try {
           const response = await fetch(url);
@@ -14,10 +13,9 @@ export default async function handler(req, res) {
         }
       };
   
-      // Fetch all 7 data feeds concurrently (Jolpica + OpenF1)
       const [
         driversData, consData, schedData, lastRaceData, qualiData, 
-        openf1Weather, openf1Stints
+        openf1Weather, openf1Stints, winnersData
       ] = await Promise.all([
         fetchJson('https://api.jolpi.ca/ergast/f1/current/driverStandings.json'),
         fetchJson('https://api.jolpi.ca/ergast/f1/current/constructorStandings.json'),
@@ -25,7 +23,8 @@ export default async function handler(req, res) {
         fetchJson('https://api.jolpi.ca/ergast/f1/current/last/results.json'),
         fetchJson('https://api.jolpi.ca/ergast/f1/current/last/qualifying.json'),
         fetchJson('https://api.openf1.org/v1/weather?session_key=latest'),
-        fetchJson('https://api.openf1.org/v1/stints?session_key=latest')
+        fetchJson('https://api.openf1.org/v1/stints?session_key=latest'),
+        fetchJson('https://api.jolpi.ca/ergast/f1/current/results/1.json?limit=100')
       ]);
   
       // Safety checks for deep JSON trees
@@ -53,7 +52,6 @@ export default async function handler(req, res) {
         };
       });
   
-      // 2. Parse Constructors
       const consList = getStandingsList(consData).ConstructorStandings || [];
       const maxConPts = consList.length ? parseFloat(consList[0].points) : 1;
       const constructors = consList.map(c => ({
@@ -66,7 +64,6 @@ export default async function handler(req, res) {
         pct: ((parseFloat(c.points) || 0) / maxConPts) * 100
       }));
   
-      // 3. Parse Schedule & Find Next Race
       const races = getRaces(schedData);
       const now = new Date();
       const schedule = races.map(r => {
@@ -85,12 +82,9 @@ export default async function handler(req, res) {
       });
       const next_race = schedule.find(r => r.status === 'upcoming') || null;
   
-      // 4. Parse OpenF1 Telemetry (Weather & Tire Stints)
       let weather = null;
       let stints = null;
-  
       if (openf1Weather && openf1Weather.length > 0) {
-        // OpenF1 pushes weather updates every minute. We grab the very last entry in the array.
         const w = openf1Weather[openf1Weather.length - 1];
         weather = {
           air_temp: w.air_temperature,
@@ -101,19 +95,15 @@ export default async function handler(req, res) {
       }
   
       const lastRaceResults = getRaces(lastRaceData)[0];
-  
       if (openf1Stints && openf1Stints.length > 0 && lastRaceResults) {
         const driverMap = {};
         let maxLap = 1;
-        
-        // Group raw OpenF1 stint array by driver_number
         openf1Stints.forEach(s => {
           if (!driverMap[s.driver_number]) driverMap[s.driver_number] = [];
           const lapStart = s.lap_start || 1;
           const lapEnd = s.lap_end || lapStart;
           const laps = lapEnd - lapStart + 1;
           if (lapEnd > maxLap) maxLap = lapEnd;
-  
           driverMap[s.driver_number].push({
             compound: (s.compound || 'unknown').toLowerCase(),
             lap_start: lapStart,
@@ -135,14 +125,10 @@ export default async function handler(req, res) {
         }).filter(d => d.stints.length > 0);
   
         if (stintDrivers.length > 0) {
-          stints = {
-            total_laps: maxLap,
-            drivers: stintDrivers
-          };
+          stints = { total_laps: maxLap, drivers: stintDrivers };
         }
       }
   
-      // 5. Build Last Race Package (Podium, FL, Quali, plus our new OpenF1 data)
       let last_race = null;
       if (lastRaceResults) {
         const podium = (lastRaceResults.Results || []).slice(0, 3).map(r => ({
@@ -189,10 +175,20 @@ export default async function handler(req, res) {
           podium,
           fastest_lap,
           qualifying,
-          weather,     // <--- Injected OpenF1 Weather
-          stints       // <--- Injected OpenF1 Tire Stints
+          weather,     
+          stints       
         };
       }
+  
+      // 2. Map out the winners for every completed race
+      const winners = {};
+      const allCompletedRaces = getRaces(winnersData);
+      allCompletedRaces.forEach(r => {
+        if (r.Results && r.Results.length > 0) {
+           const d = r.Results[0].Driver;
+           winners[r.round] = `${(d.givenName || '').charAt(0)}. ${d.familyName || ''}`;
+        }
+      });
   
       res.status(200).json({ 
         drivers, 
@@ -200,6 +196,7 @@ export default async function handler(req, res) {
         schedule, 
         next_race, 
         last_race,
+        winners, // 3. Pass the newly built winners dictionary to the frontend
         _fetched_at_utc: new Date().toISOString()
       });
     } catch (error) {

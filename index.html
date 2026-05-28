@@ -2936,6 +2936,10 @@ function renderCalendar(data) {
 }
 
 function buildWinnersMap(data) {
+  // Use the all-season winners array passed directly from the new backend
+  if (data.winners) return data.winners;
+  
+  // Safety fallback just in case the backend fails
   const m = {};
   if (data.last_race && data.last_race.podium && data.last_race.podium[0]) {
     m[data.last_race.round] = data.last_race.podium[0].driver_short || data.last_race.podium[0].driver;
