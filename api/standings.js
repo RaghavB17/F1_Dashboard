@@ -112,8 +112,8 @@ export default async function handler(req, res) {
           });
         });
   
-        // Map OpenF1 tire data to the Top 10 Finishers from Jolpica
-        const stintDrivers = (lastRaceResults.Results || []).slice(0, 5).map(r => {
+        // Map OpenF1 tire data
+        const stintDrivers = (lastRaceResults.Results || []).slice(0, 3).map(r => {
           const dNum = parseInt(r.number);
           const sData = driverMap[dNum] || [];
           return {

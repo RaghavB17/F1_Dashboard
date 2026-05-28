@@ -2962,7 +2962,7 @@ function renderDrivers(data, cfg) {
     const fav = isFav ? ' is-fav' : '';
     const teamDisp = teamDisplayName(d.team_id, d.team_name);
     const nat = NAT3[d.nationality] || (d.nationality || '').slice(0,3).toUpperCase();
-    const gap = (d.gap === null || d.gap === 0) ? '' : ` · <span class="gap">${d.gap > 0 ? '+' : ''}${d.gap}</span>`;
+    const gap = (d.gap === null || d.gap === 0) ? '' : ` · <span class="gap">${d.gap > 0 ? '-' : ''}${d.gap}</span>`;
     return `<div class="driver-row${leader}${fav}" style="--team-color: ${colour}; animation-delay:${(base + step*i).toFixed(2)}s;">
       <div class="driver-pos">${pad(d.pos)}</div>
       <div class="driver-info">
@@ -3960,7 +3960,7 @@ async function renderSpotlight(data, cfg) {
     if (cached && (Date.now() - cached.fetched_at) < 30 * 60 * 1000) {
       info = cached.data;
     } else {
-      const r = await fetch(`/api/driver/${encodeURIComponent(code)}`);
+      const r = await fetch(`/api/driver/?code=${encodeURIComponent(code)}`);
       if (!r.ok) throw new Error('http ' + r.status);
       info = await r.json();
       __spotlightCache[code] = { data: info, fetched_at: Date.now() };
