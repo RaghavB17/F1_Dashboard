@@ -6,40 +6,37 @@ export default async function handler(req, res) {
     if (!code) return res.status(200).json({ career: {}, season_results: [] });
   
     try {
-      // 1. Find the specific Driver ID using their 3-letter code
       const drvRes = await fetch(`https://api.jolpi.ca/ergast/f1/drivers.json?limit=1000`);
+      if (!drvRes.ok) throw new Error('Driver fetch failed');
       const drvData = await drvRes.json();
-      const driver = drvData.MRData.DriverTable.Drivers.find(d => d.code === code);
+      const driver = drvData?.MRData?.DriverTable?.Drivers?.find(d => d.code === code);
       
-      if (!driver) return res.status(404).json({ error: 'Driver not found' });
+      // Soft fail instead of crashing if driver isn't found
+      if (!driver) return res.status(200).json({ career: {}, season_results: [] }); 
       const driverId = driver.driverId;
   
-      // 2. Fetch their all-time stats and current season results
       const [winsRes, polesRes, resultsRes] = await Promise.all([
-        fetch(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/results/1.json?limit=1`),
-        fetch(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/qualifying/1.json?limit=1`),
-        fetch(`https://api.jolpi.ca/ergast/f1/current/drivers/${driverId}/results.json`)
+        fetch(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/results/1.json?limit=1`).then(r => r.json()).catch(() => ({})),
+        fetch(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/qualifying/1.json?limit=1`).then(r => r.json()).catch(() => ({})),
+        fetch(`https://api.jolpi.ca/ergast/f1/current/drivers/${driverId}/results.json`).then(r => r.json()).catch(() => ({}))
       ]);
   
-      const winsData = await winsRes.json();
-      const polesData = await polesRes.json();
-      const resultsData = await resultsRes.json();
-  
       const career = {
-        wins: parseInt(winsData.MRData.total || 0),
-        poles: parseInt(polesData.MRData.total || 0)
+        wins: parseInt(winsRes?.MRData?.total || 0),
+        poles: parseInt(polesRes?.MRData?.total || 0)
       };
   
-      // Grab the last 5 races
-      const season_results = (resultsData.MRData.RaceTable.Races || []).map(r => ({
-        pos: parseInt(r.Results[0].position),
-        status: r.Results[0].status,
-        short_name: r.raceName.replace(' Grand Prix', ''),
-        points: parseFloat(r.Results[0].points)
+      const races = resultsRes?.MRData?.RaceTable?.Races || [];
+      const season_results = races.map(r => ({
+        pos: parseInt(r.Results?.[0]?.position || 0),
+        status: r.Results?.[0]?.status || '',
+        short_name: (r.raceName || '').replace(' Grand Prix', ''),
+        points: parseFloat(r.Results?.[0]?.points || 0)
       })).reverse().slice(0, 5); 
   
       res.status(200).json({ career, season_results });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      // Return empty payload so it doesn't crash the frontend UI
+      res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [] });
     }
   }
