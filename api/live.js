@@ -1,14 +1,13 @@
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 's-maxage=30'); // Cache for only 30 seconds during live sessions
+    res.setHeader('Cache-Control', 's-maxage=30');
   
-    // This is a simplified proxy to OpenF1. You would expand this to map their live timing arrays.
-    const payload = {
-      live: false, // Set to true dynamically if OpenF1 indicates an active session
-      session: { type: "Race", country: "TBD", circuit: "TBD" },
+    // Returns a clean, stable fallback so the frontend gracefully defaults
+    // to the standard "paddock laps" non-live view without throwing errors.
+    res.status(200).json({
+      live: false,
+      session: {},
       grid: [],
       race_control: []
-    };
-  
-    res.status(200).json(payload);
+    });
   }
