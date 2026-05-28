@@ -48,7 +48,8 @@ export default async function handler(req, res) {
           nationality: d.Driver?.nationality || '',
           team_id: (d.Constructors?.[0]?.constructorId || '').replace(/\s+/g, '_').toLowerCase(),
           team_name: d.Constructors?.[0]?.name || '',
-          gap: topPts - pts > 0 ? (topPts - pts) : 0
+          gap: topPts - pts > 0 ? (topPts - pts) : 0,
+          permanent_number: d.Driver?.permanentNumber || ''
         };
       });
   
@@ -122,7 +123,7 @@ export default async function handler(req, res) {
         });
   
         // Map OpenF1 tire data to the Top 10 Finishers from Jolpica
-        const stintDrivers = (lastRaceResults.Results || []).slice(0, 10).map(r => {
+        const stintDrivers = (lastRaceResults.Results || []).slice(0, 5).map(r => {
           const dNum = parseInt(r.number);
           const sData = driverMap[dNum] || [];
           return {
