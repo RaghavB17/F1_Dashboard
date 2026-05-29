@@ -4,8 +4,17 @@ export default async function handler(req, res) {
     
     const code = (req.query.code || '').toUpperCase();
     if (!code) {
-      return res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [] });
+      return res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [], championships: [] });
     }
+  
+    // Hardcoded active World Champions for lightning-fast lookups. 
+    // This completely bypasses the Jolpica "season_year" API limitation.
+    const WORLD_CHAMPIONS = {
+      'HAM': ['2008', '2014', '2015', '2017', '2018', '2019', '2020'],
+      'VER': ['2021', '2022', '2023', '2024'], 
+      'ALO': ['2005', '2006'],
+      'NOR': ['2025']
+    };
   
     try {
       const fetchJson = async (url) => {
@@ -28,7 +37,6 @@ export default async function handler(req, res) {
       if (driverMatch) {
           driverId = driverMatch.Driver.driverId;
       } else {
-          // Fallback: check global historical list if not found in current standings
           const allDrvData = await fetchJson('https://api.jolpi.ca/ergast/f1/drivers.json?limit=1000');
           const allDrivers = allDrvData?.MRData?.DriverTable?.Drivers || [];
           const fallbackMatch = allDrivers.find(d => d.code === code);
@@ -36,10 +44,14 @@ export default async function handler(req, res) {
       }
       
       if (!driverId) {
-          return res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [] });
+          return res.status(200).json({ 
+              career: { wins: 0, poles: 0 }, 
+              season_results: [], 
+              championships: WORLD_CHAMPIONS[code] || [] 
+          });
       }
   
-      // 2. Fetch career wins, poles, and recent season results concurrently
+      // 2. Fetch career stats and recent form concurrently
       const [winsData, polesData, resultsData] = await Promise.all([
         fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/results/1.json?limit=1`),
         fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/qualifying/1.json?limit=1`),
@@ -63,7 +75,7 @@ export default async function handler(req, res) {
         };
       }).reverse().slice(0, 5); 
   
-      // 4. Fallback: If 2026 hasn't started yet (empty array), grab their 2025 results!
+      // Fallback: If current season has no races yet, fetch last year's results
       if (season_results.length === 0) {
          const lastYearData = await fetchJson(`https://api.jolpi.ca/ergast/f1/2025/drivers/${driverId}/results.json`);
          const lastYearRaces = lastYearData?.MRData?.RaceTable?.Races || [];
@@ -78,9 +90,16 @@ export default async function handler(req, res) {
          }).reverse().slice(0, 5);
       }
   
-      res.status(200).json({ career, season_results });
+      // 4. Instant Championship Lookup
+      const championships = WORLD_CHAMPIONS[code] || [];
+  
+      res.status(200).json({ career, season_results, championships });
     } catch (error) {
-      // Safe fallback so the UI never crashes
-      res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [] });
+      // Return safe fallback so the UI never crashes
+      res.status(200).json({ 
+          career: { wins: 0, poles: 0 }, 
+          season_results: [], 
+          championships: WORLD_CHAMPIONS[code] || [] 
+      });
     }
   }

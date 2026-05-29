@@ -2330,6 +2330,24 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   100% { transform: rotate(180deg) translateY(100%); }
 }
 @media (max-width: 720px) { .onb-rail { display: none; } }
+
+.sl-champ-card {
+  margin-top: 14px;
+  background: var(--paper);
+  border: 1px solid rgba(10,10,10,0.08);
+  padding: 14px 16px 16px;
+  position: relative;
+}
+.sl-champ-card::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 24px; height: 2px;
+  background: var(--gold);
+}
+.sl-champ-card .sc-title {
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3);
+}
+.sl-champ-card .sc-years {
+  font-family: 'Playfair Display', serif; font-style: italic; font-weight: 700; font-size: 20px; line-height: 1.4; color: var(--gold); margin-top: 6px;
+}
 </style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -2846,7 +2864,7 @@ function paintHeader(cfg) {
   const M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   $('dateline').textContent = `${D[now.getDay()]} · ${pad(now.getDate())} ${M[now.getMonth()]} · ${now.getFullYear()}`;
   $('heroLine1').textContent = name ? `${name}'s` : 'Your';
-  $('fNote').textContent = name ? `For ${name} · Lights out and away we go` : 'Lights out and away we go';
+  $('fNote').innerHTML = `${name ? `By Raghav Bucha &middot; ` : ''}Lights out and away we go <span style="opacity:0.3; margin:0 8px;">|</span> <a href="mailto:work.raghavbuchaa@gmail.com" style="color:var(--accent); text-decoration:none; font-family:'Inter', sans-serif; font-weight:600; pointer-events:auto;">Reach out to Raghav</a>`;
   document.title = `${name ? `${name}'s ` : ''}Pit Wall · Live F1 2026 Dashboard`;
 }
 
@@ -3712,10 +3730,10 @@ async function buildShareCard() {
 
   ctx.fillStyle = accent;
   ctx.font = '700 24px "JetBrains Mono", monospace';
-  ctx.fillText('f1.anirudhgoel.xyz', W / 2, H - 110);
+  ctx.fillText('f1-dashboard-rb.vercel.app', W / 2, H - 110);
   ctx.fillStyle = '#f2ece088';
   ctx.font = '500 18px "JetBrains Mono", monospace';
-  ctx.fillText('built by @anirudh.nocode  ·  yours forever', W / 2, H - 75);
+  ctx.fillText('built by @raghav_bucha  ·  yours forever', W / 2, H - 75);
 
   return new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png', 0.95));
 }
@@ -3726,7 +3744,7 @@ async function shareMyCard() {
   const file = new File([blob], 'pit-wall-card.png', { type: 'image/png' });
   if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'My Pit Wall', text: 'F1 2026 dashboard · pit wall · f1.anirudhgoel.xyz' });
+      await navigator.share({ files: [file], title: 'My Pit Wall', text: 'F1 2026 dashboard · pit wall · f1-dashboard-rb.vercel.app' });
       return;
     } catch {}
   }
@@ -3883,6 +3901,40 @@ function tickNext3() {
   });
 }
 
+function generateICalendar() {
+  const schedule = window.__latestData?.schedule || [];
+  const upcoming = schedule.filter(r => r.status === 'upcoming' || r.status === 'live');
+  if (upcoming.length === 0) return alert('Season complete, no upcoming races!');
+
+  let ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//The Pit Wall//F1 2026//EN\n";
+  upcoming.forEach(r => {
+    const dtStart = new Date(r.start_utc);
+    const dtEnd = new Date(dtStart.getTime() + 2 * 60 * 60 * 1000); // 2 hours long
+    const fmt = d => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    ics += "BEGIN:VEVENT\n";
+    ics += `UID:${r.round}@thepitwall\n`;
+    ics += `DTSTAMP:${fmt(new Date())}\n`;
+    ics += `DTSTART:${fmt(dtStart)}\n`;
+    ics += `DTEND:${fmt(dtEnd)}\n`;
+    ics += `SUMMARY:F1 ${r.short_name} GP\n`;
+    ics += `DESCRIPTION:Round ${r.round} of the 2026 Formula 1 Season at ${r.circuit}\n`;
+    ics += `LOCATION:${r.circuit}, ${r.locality}, ${r.country}\n`;
+    ics += "BEGIN:VALARM\nTRIGGER:-PT30M\nACTION:DISPLAY\nDESCRIPTION:Lights out in 30 mins!\nEND:VALARM\n";
+    ics += "END:VEVENT\n";
+  });
+  ics += "END:VCALENDAR";
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'f1-2026-calendar.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
 let __spotlightCache = {};
 async function renderSpotlight(data, cfg) {
   const body = $('spotlightBody');
@@ -3926,7 +3978,7 @@ async function renderSpotlight(data, cfg) {
           <span class="sa-icon">↗</span><span>share my card</span>
         </button>
         <button type="button" class="sl-action sl-bell" id="spotBell">
-          <span class="sa-icon">◔</span><span id="spotBellLabel">race-day reminders</span>
+          <span class="sa-icon">🗓</span><span id="spotBellLabel">sync to calendar</span>
         </button>
       </div>
     </div>
@@ -3937,25 +3989,24 @@ async function renderSpotlight(data, cfg) {
         <div class="sl-stat" id="ssCareerWins"><div class="ss-label">Career Wins</div><div class="ss-value">—</div></div>
         <div class="sl-stat" id="ssCareerPoles"><div class="ss-label">Career Poles</div><div class="ss-value">—</div></div>
       </div>
+      <div class="sl-champ-card" id="ssChampionships" style="display:none;">
+         <div class="sc-title">World Championships</div>
+         <div class="sc-years" id="ssChampYears">—</div>
+      </div>
     </div>
   `;
   const shareBtn = document.getElementById('spotShare');
   if (shareBtn) shareBtn.addEventListener('click', shareMyCard);
+  
+  // Wire up the new Calendar Sync button
   const bellBtn = document.getElementById('spotBell');
   const bellLabel = document.getElementById('spotBellLabel');
-  const alreadySubbed = !!localStorage.getItem('pit-wall:push-subscribed');
-  if (alreadySubbed && bellLabel) bellLabel.textContent = "you're subscribed";
-  if (bellBtn) bellBtn.addEventListener('click', async () => {
-    bellBtn.disabled = true;
-    if (bellLabel) bellLabel.textContent = 'asking permission…';
-    const r = await subscribeToPush();
-    if (r.ok) {
-      if (bellLabel) bellLabel.textContent = "you're subscribed";
-    } else {
-      if (bellLabel) bellLabel.textContent = r.reason || 'failed · try again';
-      setTimeout(() => { if (bellLabel) bellLabel.textContent = 'race-day reminders'; bellBtn.disabled = false; }, 2200);
-    }
+  if (bellBtn) bellBtn.addEventListener('click', () => {
+    if (bellLabel) bellLabel.textContent = 'downloading...';
+    generateICalendar();
+    setTimeout(() => { if (bellLabel) bellLabel.textContent = 'calendar synced ✓'; }, 1500);
   });
+
   meta.textContent = `${teamDisp.toUpperCase()} · live season + career numbers`;
 
   try {
@@ -3973,6 +4024,19 @@ async function renderSpotlight(data, cfg) {
     const cpEl = document.querySelector('#ssCareerPoles .ss-value');
     if (cwEl) cwEl.innerHTML = `${info.career && info.career.wins != null ? info.career.wins : '—'}<small>all-time</small>`;
     if (cpEl) cpEl.innerHTML = `${info.career && info.career.poles != null ? info.career.poles : '—'}<small>all-time</small>`;
+
+    // Populate the Championship Card
+    const champCard = document.getElementById('ssChampionships');
+    const champYears = document.getElementById('ssChampYears');
+    if (champCard && champYears && info.championships) {
+       champCard.style.display = 'block';
+       if (info.championships.length > 0) {
+          champYears.textContent = info.championships.join(', ') + ` (${info.championships.length})`;
+       } else {
+          champYears.textContent = 'None yet';
+          champYears.style.color = 'var(--ink-2)';
+       }
+    }
 
     const row = document.getElementById('spotFormRow');
     if (row && info.season_results && info.season_results.length) {
