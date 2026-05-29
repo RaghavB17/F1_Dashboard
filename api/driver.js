@@ -43,7 +43,8 @@ export default async function handler(req, res) {
         fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/results/1.json?limit=1`),
         fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/qualifying/1.json?limit=1`),
         fetchJson(`https://api.jolpi.ca/ergast/f1/current/drivers/${driverId}/results.json`),
-        fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/driverStandings/1.json`) // NEW: Championship fetch
+        // BUG FIX: Fetch ALL historical standings instead of filtering via URL
+        fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/driverStandings.json?limit=100`) 
       ]);
   
       const career = {
@@ -77,9 +78,20 @@ export default async function handler(req, res) {
          }).reverse().slice(0, 5);
       }
   
-      // 4. Process Championships
+      // 4. BULLETPROOF CHAMPIONSHIP PROCESSING
       const champLists = champsData?.MRData?.StandingsTable?.StandingsLists || [];
-      const championships = champLists.map(list => list.season);
+      const currentYear = new Date().getFullYear().toString();
+      
+      // Filter the standings manually in javascript
+      const championships = champLists
+        .filter(list => {
+          // Verify they finished in Position 1
+          const isFirst = list.DriverStandings && list.DriverStandings[0] && list.DriverStandings[0].position === "1";
+          // Ignore the current ongoing season
+          const isPastSeason = list.season !== currentYear;
+          return isFirst && isPastSeason;
+        })
+        .map(list => list.season);
   
       res.status(200).json({ career, season_results, championships });
     } catch (error) {
