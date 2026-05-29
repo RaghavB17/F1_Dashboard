@@ -7,6 +7,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [], championships: [] });
     }
   
+    // Hardcoded active World Champions for lightning-fast lookups. 
+    // This completely bypasses the Jolpica "season_year" API limitation.
+    const WORLD_CHAMPIONS = {
+      'HAM': ['2008', '2014', '2015', '2017', '2018', '2019', '2020'],
+      'VER': ['2021', '2022', '2023', '2024'], 
+      'ALO': ['2005', '2006'],
+      'NOR': ['2025']
+    };
+  
     try {
       const fetchJson = async (url) => {
         try {
@@ -18,7 +27,7 @@ export default async function handler(req, res) {
         }
       };
   
-      // 1. Get driverId quickly
+      // 1. Get driverId quickly from the current standings
       const drvData = await fetchJson('https://api.jolpi.ca/ergast/f1/current/driverStandings.json');
       const driverList = drvData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || [];
       
@@ -35,16 +44,18 @@ export default async function handler(req, res) {
       }
       
       if (!driverId) {
-          return res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [], championships: [] });
+          return res.status(200).json({ 
+              career: { wins: 0, poles: 0 }, 
+              season_results: [], 
+              championships: WORLD_CHAMPIONS[code] || [] 
+          });
       }
   
-      // 2. Fetch career stats, recent form, AND World Championships concurrently
-      const [winsData, polesData, resultsData, champsData] = await Promise.all([
+      // 2. Fetch career stats and recent form concurrently
+      const [winsData, polesData, resultsData] = await Promise.all([
         fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/results/1.json?limit=1`),
         fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/qualifying/1.json?limit=1`),
-        fetchJson(`https://api.jolpi.ca/ergast/f1/current/drivers/${driverId}/results.json`),
-        // BUG FIX: Fetch ALL historical standings instead of filtering via URL
-        fetchJson(`https://api.jolpi.ca/ergast/f1/drivers/${driverId}/driverStandings.json?limit=100`) 
+        fetchJson(`https://api.jolpi.ca/ergast/f1/current/drivers/${driverId}/results.json`)
       ]);
   
       const career = {
@@ -64,6 +75,7 @@ export default async function handler(req, res) {
         };
       }).reverse().slice(0, 5); 
   
+      // Fallback: If current season has no races yet, fetch last year's results
       if (season_results.length === 0) {
          const lastYearData = await fetchJson(`https://api.jolpi.ca/ergast/f1/2025/drivers/${driverId}/results.json`);
          const lastYearRaces = lastYearData?.MRData?.RaceTable?.Races || [];
@@ -78,23 +90,16 @@ export default async function handler(req, res) {
          }).reverse().slice(0, 5);
       }
   
-      // 4. BULLETPROOF CHAMPIONSHIP PROCESSING
-      const champLists = champsData?.MRData?.StandingsTable?.StandingsLists || [];
-      const currentYear = new Date().getFullYear().toString();
-      
-      // Filter the standings manually in javascript
-      const championships = champLists
-        .filter(list => {
-          // Verify they finished in Position 1
-          const isFirst = list.DriverStandings && list.DriverStandings[0] && list.DriverStandings[0].position === "1";
-          // Ignore the current ongoing season
-          const isPastSeason = list.season !== currentYear;
-          return isFirst && isPastSeason;
-        })
-        .map(list => list.season);
+      // 4. Instant Championship Lookup
+      const championships = WORLD_CHAMPIONS[code] || [];
   
       res.status(200).json({ career, season_results, championships });
     } catch (error) {
-      res.status(200).json({ career: { wins: 0, poles: 0 }, season_results: [], championships: [] });
+      // Return safe fallback so the UI never crashes
+      res.status(200).json({ 
+          career: { wins: 0, poles: 0 }, 
+          season_results: [], 
+          championships: WORLD_CHAMPIONS[code] || [] 
+      });
     }
   }
