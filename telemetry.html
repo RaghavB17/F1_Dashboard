@@ -107,12 +107,12 @@
 </div>
 
 <script>
-// OpenF1 Public Endpoints
+    // OpenF1 Public Endpoints
 const API_BASE = 'https://api.openf1.org/v1';
 
-// We need to scale real-world X/Y coords to our SVG viewBox (0 to 10000)
 let minX = Infinity, maxX = -Infinity;
 let minY = Infinity, maxY = -Infinity;
+let trackScale = 1, offsetX = 0, offsetY = 0;
 
 const teamColors = {
   1: '#3671C6', 11: '#3671C6', // Red Bull
@@ -128,16 +128,34 @@ const teamColors = {
 };
 
 async function initTelemetry() {
-  document.getElementById('connStatus').textContent = 'FETCHING TRACK LAYOUT...';
+  const statusEl = document.getElementById('connStatus');
+  statusEl.textContent = 'FETCHING SESSION STATE...';
   
   try {
-    // 1. Fetch Location Data to Draw the Track
-    // We grab ~500 location points from Driver 1 (or any driver) to trace the circuit outline
+    // 1. Check if the session is currently active
+    const sessionRes = await fetch(`${API_BASE}/sessions?session_key=latest`);
+    const sessionData = await sessionRes.json();
+    
+    let isLive = true;
+    if (sessionData && sessionData.length > 0) {
+      const session = sessionData[0];
+      const endTime = new Date(session.date_end);
+      
+      // If current time is past the scheduled end time, it is offline
+      if (Date.now() > endTime.getTime()) {
+        isLive = false;
+      }
+      
+      document.getElementById('sessionInfo').textContent = `${session.session_name.toUpperCase()} · ${session.country_name.toUpperCase()}`;
+    }
+
+    // 2. Fetch Location Data to Draw the Track
+    statusEl.textContent = 'MAPPING CIRCUIT...';
     const locRes = await fetch(`${API_BASE}/location?session_key=latest&driver_number=1`);
     const locData = await locRes.json();
     
     if (!locData || locData.length === 0) {
-      document.getElementById('connStatus').textContent = 'NO LIVE SESSION FOUND';
+      statusEl.textContent = 'NO TELEMETRY DATA FOUND';
       return;
     }
 
@@ -149,53 +167,88 @@ async function initTelemetry() {
       if (pt.y > maxY) maxY = pt.y;
     });
 
-    // Draw the track path
+    // THE FIX: Uniform Scaling to prevent map distortion
+    const trackWidth = maxX - minX;
+    const trackHeight = maxY - minY;
+    const canvasSize = 8000; 
+    const padding = 1000;
+    
+    trackScale = Math.min(canvasSize / trackWidth, canvasSize / trackHeight);
+    offsetX = padding + (canvasSize - (trackWidth * trackScale)) / 2;
+    offsetY = padding + (canvasSize - (trackHeight * trackScale)) / 2;
+
+    // Draw the track path (sampling every 10th point to keep SVG fast)
     const pathEl = document.getElementById('trackPath');
     let d = `M ${scaleX(locData[0].x)} ${scaleY(locData[0].y)} `;
-    for(let i=1; i < locData.length; i+=5) { // Skip points to smooth the line
+    const maxPoints = Math.min(locData.length, 3000); // 3000 points is enough for a full lap outline
+    for(let i=1; i < maxPoints; i+=10) { 
         d += `L ${scaleX(locData[i].x)} ${scaleY(locData[i].y)} `;
     }
     d += 'Z';
     pathEl.setAttribute('d', d);
 
-    document.getElementById('connStatus').textContent = 'CONNECTED: LIVE TELEMETRY ACTIVE';
+    // 3. Fallback UI if not live
+    if (!isLive) {
+       statusEl.textContent = 'OFFLINE · NO ACTIVE SESSION';
+       statusEl.style.background = '#222';
+       
+       document.getElementById('timingBody').innerHTML = `
+         <tr>
+           <td colspan="4" style="text-align:center; padding: 60px 20px; color:rgba(242,236,224,0.4); font-family:'JetBrains Mono', monospace;">
+             <div style="font-size:24px; color:#fff; margin-bottom:12px;">SESSION CONCLUDED</div>
+             Live telemetry will resume<br>during the next track session.
+           </td>
+         </tr>`;
+       
+       // Add an offline watermark to the SVG map
+       const layer = document.getElementById('carsLayer');
+       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+       text.setAttribute('x', '5000');
+       text.setAttribute('y', '5000');
+       text.setAttribute('text-anchor', 'middle');
+       text.setAttribute('fill', 'rgba(255,255,255,0.05)');
+       text.setAttribute('font-size', '600px');
+       text.setAttribute('font-family', 'Inter, sans-serif');
+       text.setAttribute('font-weight', 'bold');
+       text.textContent = "OFFLINE";
+       layer.appendChild(text);
+       return;
+    }
+
+    statusEl.textContent = 'CONNECTED · LIVE TELEMETRY ACTIVE';
     
-    // 2. Start the Polling Loops
+    // 4. Start the Polling Loops ONLY if live
     pollCarPositions();
     pollTimingData();
-    setInterval(pollCarPositions, 3000); // Update dots every 3 seconds
-    setInterval(pollTimingData, 10000);  // Update table every 10 seconds
+    setInterval(pollCarPositions, 3000); 
+    setInterval(pollTimingData, 10000);  
 
   } catch (error) {
-    document.getElementById('connStatus').textContent = 'ERROR CONNECTING TO OPENF1';
+    statusEl.textContent = 'ERROR CONNECTING TO OPENF1';
     console.error(error);
   }
 }
 
-// Math to map real coordinates to the 10000x10000 SVG Canvas
+// Math to map real coordinates to the 10000x10000 SVG Canvas uniformly
 function scaleX(x) {
-  const padding = 1000;
-  return padding + ((x - minX) / (maxX - minX)) * (10000 - padding * 2);
+  return offsetX + ((x - minX) * trackScale);
 }
 function scaleY(y) {
-  const padding = 1000;
-  return padding + ((y - minY) / (maxY - minY)) * (10000 - padding * 2);
+  return offsetY + ((y - minY) * trackScale);
 }
 
 // Fetch the very latest X,Y coordinate for every driver on track
 async function pollCarPositions() {
   try {
-    // We query locations from the last 5 seconds to get the bleeding edge
     const dateObj = new Date(Date.now() - 5000);
     const timeString = dateObj.toISOString();
     
     const res = await fetch(`${API_BASE}/location?session_key=latest&date>${timeString}`);
     const data = await res.json();
     
-    // Group by driver to find their latest known point
     const latestPos = {};
     data.forEach(pt => {
-      latestPos[pt.driver_number] = pt; // Overwrites until the last one remains
+      latestPos[pt.driver_number] = pt; 
     });
 
     const layer = document.getElementById('carsLayer');
@@ -209,7 +262,6 @@ async function pollCarPositions() {
       let label = document.getElementById(`label-${pt.driver_number}`);
 
       if (!circle) {
-        // Create Dot
         circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.id = `car-${pt.driver_number}`;
         circle.setAttribute('r', '200');
@@ -219,7 +271,6 @@ async function pollCarPositions() {
         circle.classList.add('car-dot');
         layer.appendChild(circle);
 
-        // Create Number Label
         label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         label.id = `label-${pt.driver_number}`;
         label.textContent = pt.driver_number;
@@ -250,14 +301,12 @@ async function pollTimingData() {
     const intData = await intRes.json();
     const lapsData = await lapsRes.json();
 
-    // Map the data to the latest state per driver
     const driverStats = {};
     
     posData.forEach(p => { driverStats[p.driver_number] = { pos: p.position }; });
     intData.forEach(i => { if(driverStats[i.driver_number]) driverStats[i.driver_number].interval = i.interval; });
     lapsData.forEach(l => { if(driverStats[l.driver_number]) driverStats[l.driver_number].lap_time = l.lap_duration; });
 
-    // Convert to array and sort by position
     const sortedDrivers = Object.keys(driverStats)
       .map(num => ({ num, ...driverStats[num] }))
       .sort((a, b) => a.pos - b.pos);
