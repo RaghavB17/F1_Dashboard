@@ -34,7 +34,6 @@
   
   .layout { display: flex; flex: 1; overflow: hidden; }
   
-  /* Layout Adjusted: Map takes less width, Table takes more space */
   .map-container {
     flex: 1.1; position: relative; border-right: 1px solid var(--rule);
     display: flex; align-items: center; justify-content: center;
@@ -43,30 +42,27 @@
   }
   #trackSvg { width: 95%; height: 95%; transform: rotate(-90deg); }
   
-  /* Crisp, scaled-down track lines */
+  /* Smooth track outline */
   .track-path { 
     fill: none; 
-    stroke: rgba(242,236,224,0.2); 
-    stroke-width: 80; /* Reduced from 400 for a sharper look */
+    stroke: rgba(242,236,224,0.25); 
+    stroke-width: 70; 
     stroke-linecap: round; 
     stroke-linejoin: round; 
   }
   
-  /* Smooth refresh transitions matching the 3s polling loop exactly */
-  .car-dot { 
-    transition: cx 3s linear, cy 3s linear; 
-  }
+  .car-dot { transition: cx 3s linear, cy 3s linear; }
   .car-label { 
     font-family: 'JetBrains Mono', monospace; 
-    font-size: 140px; /* Scaled down text sizing */
+    font-size: 150px; 
     fill: #fff; 
     font-weight: bold; 
     pointer-events: none; 
     transition: x 3s linear, y 3s linear;
-    text-shadow: 1px 1px 2px #000;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
   }
 
-  .data-container { flex: 1.4; display: flex; flex-direction: column; background: #0d0d0d; }
+  .data-container { flex: 1.6; display: flex; flex-direction: column; background: #0d0d0d; }
   .data-header {
     padding: 12px 16px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
     letter-spacing: 0.2em; text-transform: uppercase; border-bottom: 1px solid var(--rule);
@@ -77,10 +73,24 @@
   table { width: 100%; border-collapse: collapse; text-align: left; }
   th, td { padding: 10px 16px; border-bottom: 1px solid var(--rule); font-size: 12px; }
   th { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(242,236,224,0.5); font-weight: normal; position: sticky; top: 0; background: #111; z-index: 10;}
-  .td-pos { font-family: 'JetBrains Mono', monospace; font-weight: bold; color: var(--racing); }
-  .td-driver { font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .td-pos { font-family: 'JetBrains Mono', monospace; font-weight: bold; color: var(--paper); }
+  .td-driver { font-weight: 600; font-family: 'Inter', sans-serif; }
   .td-time { font-family: 'JetBrains Mono', monospace; text-align: right; }
   
+  /* Tyre Pills */
+  .tyre-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;
+    color: #000;
+  }
+  .tyre-soft { background: #ff4d4d; color: #fff; }
+  .tyre-medium { background: #ffd700; }
+  .tyre-hard { background: #fff; border: 2px solid #ccc; }
+  .tyre-intermediate { background: #00cc66; color: #fff; }
+  .tyre-wet { background: #3385ff; color: #fff; }
+  .tyre-unknown { background: #444; color: #aaa; }
+
   .status-bar {
     padding: 6px 16px; background: var(--racing); color: #fff;
     font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
@@ -111,12 +121,14 @@
           <tr>
             <th>Pos</th>
             <th>Driver</th>
+            <th>Tyre</th>
             <th style="text-align:right;">Last Lap</th>
+            <th style="text-align:right;">Gap</th>
             <th style="text-align:right;">Interval</th>
           </tr>
         </thead>
         <tbody id="timingBody">
-          <tr><td colspan="4" style="text-align:center; opacity:0.5; padding-top:24px;">Awaiting telemetry state...</td></tr>
+          <tr><td colspan="6" style="text-align:center; opacity:0.5; padding-top:24px;">Awaiting telemetry state...</td></tr>
         </tbody>
       </table>
     </div>
@@ -136,13 +148,8 @@ let minY = Infinity, maxY = -Infinity;
 let trackScale = 1, offsetX = 0, offsetY = 0;
 let isPolling = false;
 
-const teamColors = {
-  1: '#3671C6', 11: '#3671C6', 44: '#27F4D2', 63: '#27F4D2',
-  16: '#E8002D', 55: '#E8002D', 4: '#FF8000', 81: '#FF8000',
-  14: '#229971', 18: '#229971', 10: '#0093CC', 31: '#0093CC',
-  23: '#64C4FF', 2: '#64C4FF', 22: '#6692FF', 3: '#6692FF',
-  77: '#00877C', 24: '#00877C', 20: '#B6BABD', 27: '#B6BABD'
-};
+// Driver dictionary populated on load
+let driverDictionary = {};
 
 function scaleX(x) { return offsetX + ((x - minX) * trackScale); }
 function scaleY(y) { return offsetY + ((y - minY) * trackScale); }
@@ -153,6 +160,7 @@ async function initTelemetry() {
   statusEl.textContent = 'FETCHING SESSION STATE...';
   
   try {
+    // 1. Fetch Session Info
     const sessionRes = await fetch(`${API_PROXY}?endpoint=sessions&session_key=latest`);
     const sessionData = await sessionRes.json();
     
@@ -160,24 +168,42 @@ async function initTelemetry() {
     if (sessionData && sessionData.length > 0) {
       const session = sessionData[0];
       const endTime = new Date(session.date_end);
-      if (Date.now() > endTime.getTime()) {
-        isLive = false;
-      }
+      if (Date.now() > endTime.getTime()) isLive = false;
       document.getElementById('sessionInfo').textContent = `${session.session_name.toUpperCase()} · ${session.country_name.toUpperCase()}`;
+    }
+
+    statusEl.textContent = 'BUILDING DRIVER ROSTER...';
+
+    // 2. Fetch Driver Directory
+    const driversRes = await fetch(`${API_PROXY}?endpoint=drivers&session_key=latest`);
+    const driversList = await driversRes.json();
+    
+    if (Array.isArray(driversList)) {
+      driversList.forEach(d => {
+        driverDictionary[d.driver_number] = {
+          acronym: d.name_acronym || d.last_name.substring(0,3).toUpperCase(),
+          name: d.last_name,
+          color: '#' + (d.team_colour || 'ffffff')
+        };
+      });
     }
 
     statusEl.textContent = 'GENERATING CIRCUIT MAP...';
     
-    // FIX: Removed driver_number=1 constraint so it reliably pulls map data from whatever telemetry is present
-    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest`);
+    // 3. Trace Track Map (using ONLY ONE driver to prevent zigzagging)
+    const traceDriver = driversList.length > 0 ? driversList[0].driver_number : 1;
+    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=${traceDriver}`);
     const locData = await locRes.json();
     
     if (!locData || locData.length === 0 || locData.error) {
       throw new Error('No track telemetry data available.');
     }
 
-    // Process coordinates safely up to a clean sample size
-    const samplePoints = locData.slice(0, 1500);
+    // Sort by date to ensure the path is drawn in chronological order
+    locData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Calculate Bounding Box
+    const samplePoints = locData.slice(0, 2000); // 2000 points covers a full lap
     samplePoints.forEach(pt => {
       if (pt.x < minX) minX = pt.x;
       if (pt.x > maxX) maxX = pt.x;
@@ -196,10 +222,10 @@ async function initTelemetry() {
 
     const pathEl = document.getElementById('trackPath');
     let d = `M ${scaleX(samplePoints[0].x)} ${scaleY(samplePoints[0].y)} `;
-    for(let i = 1; i < samplePoints.length; i += 5) { 
+    for(let i = 1; i < samplePoints.length; i += 3) { 
         d += `L ${scaleX(samplePoints[i].x)} ${scaleY(samplePoints[i].y)} `;
     }
-    d += 'Z';
+    // Don't close the path with Z unless it's a perfect loop, otherwise it draws a harsh straight line through the map
     pathEl.setAttribute('d', d);
 
     if (!isLive) {
@@ -216,7 +242,7 @@ async function initTelemetry() {
     pollCarPositions();
     pollTimingData();
     
-    // Continuous execution loops
+    // Continuous loops
     setInterval(pollCarPositions, 3000); 
     setInterval(pollTimingData, 6000);  
 
@@ -230,7 +256,6 @@ async function initTelemetry() {
 async function pollCarPositions() {
   if (!isPolling) return;
   try {
-    // Lookup structural changes from the past 10 seconds to account for slight latency ingestion windows
     const timeString = new Date(Date.now() - 10000).toISOString();
     const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&date>${timeString}`);
     const data = await res.json();
@@ -245,7 +270,9 @@ async function pollCarPositions() {
     Object.values(latestPos).forEach(pt => {
       const sx = scaleX(pt.x);
       const sy = scaleY(pt.y);
-      const color = teamColors[pt.driver_number] || '#ffffff';
+      const driverMeta = driverDictionary[pt.driver_number] || {};
+      const color = driverMeta.color || '#ffffff';
+      const labelText = driverMeta.acronym || pt.driver_number;
 
       let circle = document.getElementById(`car-${pt.driver_number}`);
       let label = document.getElementById(`label-${pt.driver_number}`);
@@ -253,24 +280,24 @@ async function pollCarPositions() {
       if (!circle) {
         circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.id = `car-${pt.driver_number}`;
-        circle.setAttribute('r', '60'); // Reduced from 200 for crispness
+        circle.setAttribute('r', '75'); 
         circle.setAttribute('fill', color);
         circle.setAttribute('stroke', '#000');
-        circle.setAttribute('stroke-width', '15');
+        circle.setAttribute('stroke-width', '25');
         circle.classList.add('car-dot');
         layer.appendChild(circle);
 
         label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         label.id = `label-${pt.driver_number}`;
-        label.textContent = pt.driver_number;
+        label.textContent = labelText;
         label.classList.add('car-label');
         layer.appendChild(label);
       }
 
       circle.setAttribute('cx', sx);
       circle.setAttribute('cy', sy);
-      label.setAttribute('x', sx + 90); // Adjusted offsets for cleaner rendering
-      label.setAttribute('y', sy + 50);
+      label.setAttribute('x', sx + 120); 
+      label.setAttribute('y', sy + 60);
     });
   } catch (e) {
     console.warn("Location packet refresh skipped", e);
@@ -280,27 +307,39 @@ async function pollCarPositions() {
 async function pollTimingData() {
   if (!isPolling) return;
   try {
-    // FIX: Request only the most recent snapshots using optimized query windows to prevent huge payload sizes
-    const [posRes, intRes, lapsRes] = await Promise.all([
+    const [posRes, intRes, lapsRes, stintsRes] = await Promise.all([
       fetch(`${API_PROXY}?endpoint=position&session_key=latest`),
       fetch(`${API_PROXY}?endpoint=intervals&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=laps&session_key=latest`)
+      fetch(`${API_PROXY}?endpoint=laps&session_key=latest`),
+      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`)
     ]);
 
     const posData = await posRes.json();
     const intData = await intRes.json();
     const lapsData = await lapsRes.json();
+    const stintsData = await stintsRes.json();
 
     if(!Array.isArray(posData)) return;
 
     const driverStats = {};
     
-    // Safely parse out the structural endpoints map matching the current data states
-    posData.forEach(p => { driverStats[p.driver_number] = { pos: p.position }; });
+    // 1. Map Positions
+    posData.forEach(p => { 
+      if(!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
+      driverStats[p.driver_number].pos = p.position; 
+    });
     
+    // 2. Map Intervals & Gaps
     if (Array.isArray(intData)) {
-      intData.forEach(i => { if(driverStats[i.driver_number]) driverStats[i.driver_number].interval = i.interval; });
+      intData.forEach(i => { 
+        if(driverStats[i.driver_number]) {
+          driverStats[i.driver_number].interval = i.interval; 
+          driverStats[i.driver_number].gap = i.gap_to_leader;
+        }
+      });
     }
+
+    // 3. Map Lap Times
     if (Array.isArray(lapsData)) {
       lapsData.forEach(l => { 
         if(driverStats[l.driver_number] && l.lap_duration) {
@@ -309,6 +348,18 @@ async function pollTimingData() {
       });
     }
 
+    // 4. Map Tyre Stints
+    if (Array.isArray(stintsData)) {
+      // Sort so highest stint number is processed first (active stint)
+      stintsData.sort((a,b) => b.stint_number - a.stint_number);
+      stintsData.forEach(s => {
+        if(driverStats[s.driver_number] && !driverStats[s.driver_number].tyre) {
+          driverStats[s.driver_number].tyre = s.compound ? s.compound.toLowerCase() : 'unknown';
+        }
+      });
+    }
+
+    // Compile & Sort
     const sortedDrivers = Object.keys(driverStats)
       .map(num => ({ num, ...driverStats[num] }))
       .sort((a, b) => (a.pos || 99) - (b.pos || 99));
@@ -316,14 +367,24 @@ async function pollTimingData() {
     if(sortedDrivers.length === 0) return;
 
     const tbody = document.getElementById('timingBody');
-    tbody.innerHTML = sortedDrivers.map(d => `
+    tbody.innerHTML = sortedDrivers.map(d => {
+      const meta = driverDictionary[d.num] || {};
+      const dName = meta.name ? `${meta.acronym} <span style="opacity:0.4; font-size:10px; margin-left:6px;">${meta.name.toUpperCase()}</span>` : `#${d.num}`;
+      
+      const tyreCompound = d.tyre || 'unknown';
+      const tyreLabel = tyreCompound !== 'unknown' ? tyreCompound.charAt(0).toUpperCase() : '?';
+
+      return `
       <tr>
-        <td class="td-pos">${d.pos ? 'P' + d.pos : '-'}</td>
-        <td class="td-driver">#${d.num}</td>
-        <td class="td-time">${d.lap_time ? formatLapTime(d.lap_time) : 'No Time'}</td>
-        <td class="td-time">${d.interval !== undefined && d.interval !== null ? '+' + d.interval.toFixed(3) : 'Leader'}</td>
+        <td class="td-pos">${d.pos || '-'}</td>
+        <td class="td-driver" style="border-left: 3px solid ${meta.color || '#fff'}; padding-left:12px;">${dName}</td>
+        <td><span class="tyre-pill tyre-${tyreCompound}">${tyreLabel}</span></td>
+        <td class="td-time">${d.lap_time ? formatLapTime(d.lap_time) : 'In Pits'}</td>
+        <td class="td-time">${d.gap !== undefined && d.gap !== null ? '+' + d.gap.toFixed(3) : 'LEADER'}</td>
+        <td class="td-time">${d.interval !== undefined && d.interval !== null ? '+' + d.interval.toFixed(3) : '-'}</td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
 
   } catch (e) {
     console.warn("Timing metrics ingestion dropped", e);
@@ -340,7 +401,7 @@ function formatLapTime(timeInSeconds) {
 function renderOfflineTable() {
   document.getElementById('timingBody').innerHTML = `
     <tr>
-      <td colspan="4" style="text-align:center; padding: 60px 20px; color:rgba(242,236,224,0.4); font-family:'JetBrains Mono', monospace;">
+      <td colspan="6" style="text-align:center; padding: 60px 20px; color:rgba(242,236,224,0.4); font-family:'JetBrains Mono', monospace;">
         <div style="font-size:18px; color:#fff; margin-bottom:12px;">SESSION COMPLETED</div>
         Live streaming feeds are available during active track operations.
       </td>
