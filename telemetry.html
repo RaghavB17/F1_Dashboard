@@ -39,7 +39,7 @@
     display: flex; align-items: center; justify-content: center;
     background: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%);
   }
-  #trackSvg { width: 90%; height: 90%; transform: rotate(-90deg); /* Adjust orientation */ }
+  #trackSvg { width: 90%; height: 90%; transform: rotate(-90deg); }
   .track-path { fill: none; stroke: rgba(242,236,224,0.15); stroke-width: 400; stroke-linecap: round; stroke-linejoin: round; }
   .car-dot { transition: cx 1s linear, cy 1s linear; }
   .car-label { font-family: 'JetBrains Mono', monospace; font-size: 400px; fill: #fff; font-weight: bold; pointer-events: none; transition: x 1s linear, y 1s linear; }
@@ -62,7 +62,7 @@
   .status-bar {
     padding: 8px 16px; background: var(--racing); color: #fff;
     font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
-    display: flex; justify-content: space-between;
+    display: flex; justify-content: space-between; transition: background 0.3s;
   }
 </style>
 </head>
@@ -70,7 +70,10 @@
 
 <header class="header">
   <div class="header-title">Live <em>Telemetry</em></div>
-  <a href="/index.html" class="back-btn">← RETURN TO PIT WALL</a>
+  <div style="display:flex; gap:12px; align-items:center;">
+    <input type="password" id="openf1Token" placeholder="OpenF1 Live Token" title="Required for live sessions" style="background:#111; color:var(--paper); border:1px solid var(--rule); padding:6px 10px; font-family:'JetBrains Mono', monospace; font-size:10px; width:180px; outline:none;">
+    <a href="/index.html" class="back-btn">← RETURN TO PIT WALL</a>
+  </div>
 </header>
 
 <div class="layout">
@@ -94,25 +97,25 @@
           </tr>
         </thead>
         <tbody id="timingBody">
-          <tr><td colspan="4" style="text-align:center; opacity:0.5;">Awaiting telemetry...</td></tr>
+          <tr><td colspan="4" style="text-align:center; opacity:0.5; padding-top:24px;">Awaiting telemetry...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 </div>
 
-<div class="status-bar">
+<div class="status-bar" id="statusBar">
   <span id="connStatus">CONNECTING TO OPENF1...</span>
   <span id="sessionInfo">AWAITING DATA</span>
 </div>
 
 <script>
-    // OpenF1 Public Endpoints
 const API_BASE = 'https://api.openf1.org/v1';
 
 let minX = Infinity, maxX = -Infinity;
 let minY = Infinity, maxY = -Infinity;
 let trackScale = 1, offsetX = 0, offsetY = 0;
+let isPolling = false;
 
 const teamColors = {
   1: '#3671C6', 11: '#3671C6', // Red Bull
@@ -127,32 +130,54 @@ const teamColors = {
   20: '#B6BABD', 27: '#B6BABD'  // Haas
 };
 
+// Retrieve token on load
+const tokenInput = document.getElementById('openf1Token');
+tokenInput.value = localStorage.getItem('openf1_token') || '';
+tokenInput.addEventListener('input', (e) => {
+  localStorage.setItem('openf1_token', e.target.value.trim());
+});
+
+function getFetchParams() {
+  const token = localStorage.getItem('openf1_token');
+  if (token && token.trim() !== '') {
+    return { headers: { 'Authorization': `Bearer ${token.trim()}` } };
+  }
+  return {};
+}
+
+async function safeFetch(url) {
+  const res = await fetch(url, getFetchParams());
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH_REQUIRED');
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+// Math to map real coordinates uniformly
+function scaleX(x) { return offsetX + ((x - minX) * trackScale); }
+function scaleY(y) { return offsetY + ((y - minY) * trackScale); }
+
 async function initTelemetry() {
   const statusEl = document.getElementById('connStatus');
+  const statusBar = document.getElementById('statusBar');
   statusEl.textContent = 'FETCHING SESSION STATE...';
   
   try {
-    // 1. Check if the session is currently active
-    const sessionRes = await fetch(`${API_BASE}/sessions?session_key=latest`);
-    const sessionData = await sessionRes.json();
+    const sessionData = await safeFetch(`${API_BASE}/sessions?session_key=latest`);
     
     let isLive = true;
     if (sessionData && sessionData.length > 0) {
       const session = sessionData[0];
       const endTime = new Date(session.date_end);
-      
-      // If current time is past the scheduled end time, it is offline
       if (Date.now() > endTime.getTime()) {
         isLive = false;
       }
-      
       document.getElementById('sessionInfo').textContent = `${session.session_name.toUpperCase()} · ${session.country_name.toUpperCase()}`;
     }
 
-    // 2. Fetch Location Data to Draw the Track
     statusEl.textContent = 'MAPPING CIRCUIT...';
-    const locRes = await fetch(`${API_BASE}/location?session_key=latest&driver_number=1`);
-    const locData = await locRes.json();
+    const locData = await safeFetch(`${API_BASE}/location?session_key=latest&driver_number=1`);
     
     if (!locData || locData.length === 0) {
       statusEl.textContent = 'NO TELEMETRY DATA FOUND';
@@ -167,7 +192,6 @@ async function initTelemetry() {
       if (pt.y > maxY) maxY = pt.y;
     });
 
-    // THE FIX: Uniform Scaling to prevent map distortion
     const trackWidth = maxX - minX;
     const trackHeight = maxY - minY;
     const canvasSize = 8000; 
@@ -177,20 +201,19 @@ async function initTelemetry() {
     offsetX = padding + (canvasSize - (trackWidth * trackScale)) / 2;
     offsetY = padding + (canvasSize - (trackHeight * trackScale)) / 2;
 
-    // Draw the track path (sampling every 10th point to keep SVG fast)
     const pathEl = document.getElementById('trackPath');
     let d = `M ${scaleX(locData[0].x)} ${scaleY(locData[0].y)} `;
-    const maxPoints = Math.min(locData.length, 3000); // 3000 points is enough for a full lap outline
+    const maxPoints = Math.min(locData.length, 3000); 
     for(let i=1; i < maxPoints; i+=10) { 
         d += `L ${scaleX(locData[i].x)} ${scaleY(locData[i].y)} `;
     }
     d += 'Z';
     pathEl.setAttribute('d', d);
 
-    // 3. Fallback UI if not live
+    // Fallback UI if not live
     if (!isLive) {
        statusEl.textContent = 'OFFLINE · NO ACTIVE SESSION';
-       statusEl.style.background = '#222';
+       statusBar.style.background = '#222';
        
        document.getElementById('timingBody').innerHTML = `
          <tr>
@@ -200,7 +223,6 @@ async function initTelemetry() {
            </td>
          </tr>`;
        
-       // Add an offline watermark to the SVG map
        const layer = document.getElementById('carsLayer');
        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
        text.setAttribute('x', '5000');
@@ -216,40 +238,43 @@ async function initTelemetry() {
     }
 
     statusEl.textContent = 'CONNECTED · LIVE TELEMETRY ACTIVE';
+    statusBar.style.background = 'var(--racing)';
     
-    // 4. Start the Polling Loops ONLY if live
+    isPolling = true;
     pollCarPositions();
     pollTimingData();
     setInterval(pollCarPositions, 3000); 
     setInterval(pollTimingData, 10000);  
 
   } catch (error) {
-    statusEl.textContent = 'ERROR CONNECTING TO OPENF1';
+    if (error.message === 'AUTH_REQUIRED') {
+      statusEl.textContent = 'LIVE SESSION ACTIVE · OPENF1 TOKEN REQUIRED';
+      statusBar.style.background = '#FF8000'; 
+      document.getElementById('timingBody').innerHTML = `
+         <tr>
+           <td colspan="4" style="text-align:center; padding: 60px 20px; color:rgba(242,236,224,0.4); font-family:'JetBrains Mono', monospace;">
+             <div style="font-size:18px; color:#fff; margin-bottom:12px;">AUTHORIZATION REQUIRED</div>
+             Enter your OpenF1 access token in the header<br>to view real-time data during live sessions.
+           </td>
+         </tr>`;
+    } else {
+      statusEl.textContent = 'ERROR CONNECTING TO OPENF1';
+      statusBar.style.background = '#444';
+    }
     console.error(error);
   }
 }
 
-// Math to map real coordinates to the 10000x10000 SVG Canvas uniformly
-function scaleX(x) {
-  return offsetX + ((x - minX) * trackScale);
-}
-function scaleY(y) {
-  return offsetY + ((y - minY) * trackScale);
-}
-
-// Fetch the very latest X,Y coordinate for every driver on track
 async function pollCarPositions() {
+  if (!isPolling) return;
   try {
     const dateObj = new Date(Date.now() - 5000);
     const timeString = dateObj.toISOString();
     
-    const res = await fetch(`${API_BASE}/location?session_key=latest&date>${timeString}`);
-    const data = await res.json();
+    const data = await safeFetch(`${API_BASE}/location?session_key=latest&date>${timeString}`);
     
     const latestPos = {};
-    data.forEach(pt => {
-      latestPos[pt.driver_number] = pt; 
-    });
+    data.forEach(pt => { latestPos[pt.driver_number] = pt; });
 
     const layer = document.getElementById('carsLayer');
     
@@ -288,18 +313,14 @@ async function pollCarPositions() {
   }
 }
 
-// Fetch the current standings, intervals, and last lap times
 async function pollTimingData() {
+  if (!isPolling) return;
   try {
-    const [posRes, intRes, lapsRes] = await Promise.all([
-      fetch(`${API_BASE}/position?session_key=latest`),
-      fetch(`${API_BASE}/intervals?session_key=latest`),
-      fetch(`${API_BASE}/laps?session_key=latest`)
+    const [posData, intData, lapsData] = await Promise.all([
+      safeFetch(`${API_BASE}/position?session_key=latest`),
+      safeFetch(`${API_BASE}/intervals?session_key=latest`),
+      safeFetch(`${API_BASE}/laps?session_key=latest`)
     ]);
-
-    const posData = await posRes.json();
-    const intData = await intRes.json();
-    const lapsData = await lapsRes.json();
 
     const driverStats = {};
     
@@ -326,7 +347,6 @@ async function pollTimingData() {
   }
 }
 
-// Start the engine
 initTelemetry();
 </script>
 </body>
