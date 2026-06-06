@@ -70,10 +70,7 @@
 
 <header class="header">
   <div class="header-title">Live <em>Telemetry</em></div>
-  <div style="display:flex; gap:12px; align-items:center;">
-    <input type="password" id="openf1Token" placeholder="OpenF1 Live Token" title="Required for live sessions" style="background:#111; color:var(--paper); border:1px solid var(--rule); padding:6px 10px; font-family:'JetBrains Mono', monospace; font-size:10px; width:180px; outline:none;">
-    <a href="/index.html" class="back-btn">← RETURN TO PIT WALL</a>
-  </div>
+  <a href="/index.html" class="back-btn">← RETURN TO PIT WALL</a>
 </header>
 
 <div class="layout">
@@ -105,12 +102,13 @@
 </div>
 
 <div class="status-bar" id="statusBar">
-  <span id="connStatus">CONNECTING TO OPENF1...</span>
+  <span id="connStatus">CONNECTING TO PROXY...</span>
   <span id="sessionInfo">AWAITING DATA</span>
 </div>
 
 <script>
-const API_BASE = 'https://api.openf1.org/v1';
+// We now point directly to YOUR Vercel backend proxy
+const API_PROXY = '/api/telemetry';
 
 let minX = Infinity, maxX = -Infinity;
 let minY = Infinity, maxY = -Infinity;
@@ -130,30 +128,6 @@ const teamColors = {
   20: '#B6BABD', 27: '#B6BABD'  // Haas
 };
 
-// Retrieve token on load
-const tokenInput = document.getElementById('openf1Token');
-tokenInput.value = localStorage.getItem('openf1_token') || '';
-tokenInput.addEventListener('input', (e) => {
-  localStorage.setItem('openf1_token', e.target.value.trim());
-});
-
-function getFetchParams() {
-  const token = localStorage.getItem('openf1_token');
-  if (token && token.trim() !== '') {
-    return { headers: { 'Authorization': `Bearer ${token.trim()}` } };
-  }
-  return {};
-}
-
-async function safeFetch(url) {
-  const res = await fetch(url, getFetchParams());
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) throw new Error('AUTH_REQUIRED');
-    throw new Error(`HTTP ${res.status}`);
-  }
-  return await res.json();
-}
-
 // Math to map real coordinates uniformly
 function scaleX(x) { return offsetX + ((x - minX) * trackScale); }
 function scaleY(y) { return offsetY + ((y - minY) * trackScale); }
@@ -164,7 +138,9 @@ async function initTelemetry() {
   statusEl.textContent = 'FETCHING SESSION STATE...';
   
   try {
-    const sessionData = await safeFetch(`${API_BASE}/sessions?session_key=latest`);
+    // 1. Check Session State via Proxy
+    const sessionRes = await fetch(`${API_PROXY}?endpoint=sessions&session_key=latest`);
+    const sessionData = await sessionRes.json();
     
     let isLive = true;
     if (sessionData && sessionData.length > 0) {
@@ -177,11 +153,12 @@ async function initTelemetry() {
     }
 
     statusEl.textContent = 'MAPPING CIRCUIT...';
-    const locData = await safeFetch(`${API_BASE}/location?session_key=latest&driver_number=1`);
+    // 2. Fetch Circuit Data via Proxy
+    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=1`);
+    const locData = await locRes.json();
     
-    if (!locData || locData.length === 0) {
-      statusEl.textContent = 'NO TELEMETRY DATA FOUND';
-      return;
+    if (!locData || locData.length === 0 || locData.error) {
+      throw new Error(locData.error || 'NO TELEMETRY DATA FOUND');
     }
 
     // Calculate Bounding Box
@@ -247,20 +224,8 @@ async function initTelemetry() {
     setInterval(pollTimingData, 10000);  
 
   } catch (error) {
-    if (error.message === 'AUTH_REQUIRED') {
-      statusEl.textContent = 'LIVE SESSION ACTIVE · OPENF1 TOKEN REQUIRED';
-      statusBar.style.background = '#FF8000'; 
-      document.getElementById('timingBody').innerHTML = `
-         <tr>
-           <td colspan="4" style="text-align:center; padding: 60px 20px; color:rgba(242,236,224,0.4); font-family:'JetBrains Mono', monospace;">
-             <div style="font-size:18px; color:#fff; margin-bottom:12px;">AUTHORIZATION REQUIRED</div>
-             Enter your OpenF1 access token in the header<br>to view real-time data during live sessions.
-           </td>
-         </tr>`;
-    } else {
-      statusEl.textContent = 'ERROR CONNECTING TO OPENF1';
-      statusBar.style.background = '#444';
-    }
+    statusEl.textContent = 'ERROR CONNECTING TO PROXY OR OPENF1';
+    statusBar.style.background = '#444';
     console.error(error);
   }
 }
@@ -271,7 +236,8 @@ async function pollCarPositions() {
     const dateObj = new Date(Date.now() - 5000);
     const timeString = dateObj.toISOString();
     
-    const data = await safeFetch(`${API_BASE}/location?session_key=latest&date>${timeString}`);
+    const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&date>${timeString}`);
+    const data = await res.json();
     
     const latestPos = {};
     data.forEach(pt => { latestPos[pt.driver_number] = pt; });
@@ -316,11 +282,15 @@ async function pollCarPositions() {
 async function pollTimingData() {
   if (!isPolling) return;
   try {
-    const [posData, intData, lapsData] = await Promise.all([
-      safeFetch(`${API_BASE}/position?session_key=latest`),
-      safeFetch(`${API_BASE}/intervals?session_key=latest`),
-      safeFetch(`${API_BASE}/laps?session_key=latest`)
+    const [posRes, intRes, lapsRes] = await Promise.all([
+      fetch(`${API_PROXY}?endpoint=position&session_key=latest`),
+      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest`),
+      fetch(`${API_PROXY}?endpoint=laps&session_key=latest`)
     ]);
+
+    const posData = await posRes.json();
+    const intData = await intRes.json();
+    const lapsData = await lapsRes.json();
 
     const driverStats = {};
     
