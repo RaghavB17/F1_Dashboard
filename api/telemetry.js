@@ -48,7 +48,6 @@ export default async function handler(req, res) {
     const headers = { 'accept': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    // Helper to fetch OpenF1 and translate our safe 'timeWindow' param to their 'date>=' format
     const fetchOpenF1 = async (path, qsObj = {}) => {
       const finalQs = {};
       for (const key in qsObj) {
@@ -56,10 +55,13 @@ export default async function handler(req, res) {
         else finalQs[key] = qsObj[key];
       }
       const qsString = new URLSearchParams(finalQs).toString();
+      const url = `https://api.openf1.org/v1/${path}?${qsString}`;
       
-      const response = await fetch(`https://api.openf1.org/v1/${path}?${qsString}`, { headers });
+      console.log(`[PROXY] Fetching -> ${url}`); // <-- ADDED LOG
+      const response = await fetch(url, { headers });
       
       if (!response.ok) {
+        console.error(`[PROXY ERROR] ${url} returned ${response.status}`); // <-- ADDED LOG
         if (response.status === 401) throw new Error('AUTH_REQUIRED');
         if (response.status === 429) throw new Error('RATE_LIMITED');
         throw new Error(`OpenF1 Error: ${response.status}`);
