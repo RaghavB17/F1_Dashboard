@@ -42,7 +42,6 @@
   }
   #trackSvg { width: 95%; height: 95%; transform: rotate(-90deg); }
   
-  /* Smooth track outline */
   .track-path { 
     fill: none; 
     stroke: rgba(242,236,224,0.25); 
@@ -77,7 +76,6 @@
   .td-driver { font-weight: 600; font-family: 'Inter', sans-serif; }
   .td-time { font-family: 'JetBrains Mono', monospace; text-align: right; }
   
-  /* Tyre Pills */
   .tyre-pill {
     display: inline-flex; align-items: center; justify-content: center;
     width: 20px; height: 20px; border-radius: 50%;
@@ -148,7 +146,8 @@ let minY = Infinity, maxY = -Infinity;
 let trackScale = 1, offsetX = 0, offsetY = 0;
 let isPolling = false;
 
-// Driver dictionary populated on load
+// Global Cache prevents UI flickering
+window.driverStatsCache = {};
 let driverDictionary = {};
 
 function scaleX(x) { return offsetX + ((x - minX) * trackScale); }
@@ -160,21 +159,24 @@ async function initTelemetry() {
   statusEl.textContent = 'FETCHING SESSION STATE...';
   
   try {
-    // 1. Fetch Session Info
     const sessionRes = await fetch(`${API_PROXY}?endpoint=sessions&session_key=latest`);
     const sessionData = await sessionRes.json();
     
     let isLive = true;
+    let sessionStartPlus15 = new Date().toISOString();
+
     if (sessionData && sessionData.length > 0) {
       const session = sessionData[0];
       const endTime = new Date(session.date_end);
       if (Date.now() > endTime.getTime()) isLive = false;
       document.getElementById('sessionInfo').textContent = `${session.session_name.toUpperCase()} · ${session.country_name.toUpperCase()}`;
+      
+      // Calculate a 15-minute window from the start of the session to safely draw the map
+      const sessionStart = new Date(session.date_start);
+      sessionStartPlus15 = new Date(sessionStart.getTime() + 15 * 60000).toISOString();
     }
 
     statusEl.textContent = 'BUILDING DRIVER ROSTER...';
-
-    // 2. Fetch Driver Directory
     const driversRes = await fetch(`${API_PROXY}?endpoint=drivers&session_key=latest`);
     const driversList = await driversRes.json();
     
@@ -190,43 +192,38 @@ async function initTelemetry() {
 
     statusEl.textContent = 'GENERATING CIRCUIT MAP...';
     
-    // 3. Trace Track Map (using ONLY ONE driver to prevent zigzagging)
+    // THE FIX: Restrict the map fetch to the first 15 mins to prevent 4.5MB Vercel Crash
     const traceDriver = driversList.length > 0 ? driversList[0].driver_number : 1;
-    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=${traceDriver}`);
+    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=${traceDriver}&date<=${sessionStartPlus15}`);
     const locData = await locRes.json();
     
-    if (!locData || locData.length === 0 || locData.error) {
-      throw new Error('No track telemetry data available.');
+    if (locData && Array.isArray(locData) && locData.length > 0 && !locData.error) {
+      locData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const samplePoints = locData.slice(0, 2000); 
+      samplePoints.forEach(pt => {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.y > maxY) maxY = pt.y;
+      });
+
+      const trackWidth = maxX - minX || 1;
+      const trackHeight = maxY - minY || 1;
+      const canvasSize = 8500; 
+      const padding = 750;
+      
+      trackScale = Math.min(canvasSize / trackWidth, canvasSize / trackHeight);
+      offsetX = padding + (canvasSize - (trackWidth * trackScale)) / 2;
+      offsetY = padding + (canvasSize - (trackHeight * trackScale)) / 2;
+
+      const pathEl = document.getElementById('trackPath');
+      let d = `M ${scaleX(samplePoints[0].x)} ${scaleY(samplePoints[0].y)} `;
+      for(let i = 1; i < samplePoints.length; i += 3) { 
+          d += `L ${scaleX(samplePoints[i].x)} ${scaleY(samplePoints[i].y)} `;
+      }
+      pathEl.setAttribute('d', d);
     }
-
-    // Sort by date to ensure the path is drawn in chronological order
-    locData.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Calculate Bounding Box
-    const samplePoints = locData.slice(0, 2000); // 2000 points covers a full lap
-    samplePoints.forEach(pt => {
-      if (pt.x < minX) minX = pt.x;
-      if (pt.x > maxX) maxX = pt.x;
-      if (pt.y < minY) minY = pt.y;
-      if (pt.y > maxY) maxY = pt.y;
-    });
-
-    const trackWidth = maxX - minX || 1;
-    const trackHeight = maxY - minY || 1;
-    const canvasSize = 8500; 
-    const padding = 750;
-    
-    trackScale = Math.min(canvasSize / trackWidth, canvasSize / trackHeight);
-    offsetX = padding + (canvasSize - (trackWidth * trackScale)) / 2;
-    offsetY = padding + (canvasSize - (trackHeight * trackScale)) / 2;
-
-    const pathEl = document.getElementById('trackPath');
-    let d = `M ${scaleX(samplePoints[0].x)} ${scaleY(samplePoints[0].y)} `;
-    for(let i = 1; i < samplePoints.length; i += 3) { 
-        d += `L ${scaleX(samplePoints[i].x)} ${scaleY(samplePoints[i].y)} `;
-    }
-    // Don't close the path with Z unless it's a perfect loop, otherwise it draws a harsh straight line through the map
-    pathEl.setAttribute('d', d);
 
     if (!isLive) {
        statusEl.textContent = 'OFFLINE · SESSION COMPLETED';
@@ -242,7 +239,6 @@ async function initTelemetry() {
     pollCarPositions();
     pollTimingData();
     
-    // Continuous loops
     setInterval(pollCarPositions, 3000); 
     setInterval(pollTimingData, 6000);  
 
@@ -256,8 +252,9 @@ async function initTelemetry() {
 async function pollCarPositions() {
   if (!isPolling) return;
   try {
+    // THE FIX: Proper query string syntax ensures the payload is extremely small
     const timeString = new Date(Date.now() - 10000).toISOString();
-    const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&date>${timeString}`);
+    const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&date>=${timeString}`);
     const data = await res.json();
     
     if (!Array.isArray(data)) return;
@@ -307,15 +304,14 @@ async function pollCarPositions() {
 async function pollTimingData() {
   if (!isPolling) return;
   try {
-    // 1. Create a 2.5 minute rolling window (150,000 milliseconds)
-    // This stops Vercel from crashing by preventing it from downloading the entire race history!
+    // THE FIX: Constrain all table data to the last 2.5 minutes
     const timeWindow = new Date(Date.now() - 150000).toISOString();
 
     const [posRes, intRes, lapsRes, stintsRes] = await Promise.all([
-      fetch(`${API_PROXY}?endpoint=position&session_key=latest&date>${timeWindow}`),
-      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest&date>${timeWindow}`),
-      fetch(`${API_PROXY}?endpoint=laps&session_key=latest&date>${timeWindow}`),
-      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`) // Stints is tiny, safe to fetch all
+      fetch(`${API_PROXY}?endpoint=position&session_key=latest&date>=${timeWindow}`),
+      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest&date>=${timeWindow}`),
+      fetch(`${API_PROXY}?endpoint=laps&session_key=latest&date>=${timeWindow}`),
+      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`) 
     ]);
 
     const posData = await posRes.json();
@@ -325,18 +321,13 @@ async function pollTimingData() {
 
     if(!Array.isArray(posData)) return;
 
-    // 2. Global Cache: Store stats globally so drivers don't disappear from the 
-    // table if they haven't crossed a timing line in the last 2.5 minutes
-    window.driverStatsCache = window.driverStatsCache || {};
     const driverStats = window.driverStatsCache;
     
-    // Map Positions
     posData.forEach(p => { 
       if(!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
       driverStats[p.driver_number].pos = p.position; 
     });
     
-    // Map Intervals & Gaps
     if (Array.isArray(intData)) {
       intData.forEach(i => { 
         if(driverStats[i.driver_number]) {
@@ -346,7 +337,6 @@ async function pollTimingData() {
       });
     }
 
-    // Map Lap Times
     if (Array.isArray(lapsData)) {
       lapsData.forEach(l => { 
         if(driverStats[l.driver_number] && l.lap_duration) {
@@ -355,9 +345,7 @@ async function pollTimingData() {
       });
     }
 
-    // Map Tyre Stints
     if (Array.isArray(stintsData)) {
-      // Sort so highest stint number is processed first (active stint)
       stintsData.sort((a,b) => b.stint_number - a.stint_number);
       stintsData.forEach(s => {
         if(driverStats[s.driver_number] && (!driverStats[s.driver_number].stint_num || s.stint_number >= driverStats[s.driver_number].stint_num)) {
@@ -367,7 +355,6 @@ async function pollTimingData() {
       });
     }
 
-    // Compile & Sort
     const sortedDrivers = Object.keys(driverStats)
       .map(num => ({ num, ...driverStats[num] }))
       .sort((a, b) => (a.pos || 99) - (b.pos || 99));
