@@ -307,11 +307,15 @@ async function pollCarPositions() {
 async function pollTimingData() {
   if (!isPolling) return;
   try {
+    // 1. Create a 2.5 minute rolling window (150,000 milliseconds)
+    // This stops Vercel from crashing by preventing it from downloading the entire race history!
+    const timeWindow = new Date(Date.now() - 150000).toISOString();
+
     const [posRes, intRes, lapsRes, stintsRes] = await Promise.all([
-      fetch(`${API_PROXY}?endpoint=position&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=laps&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`)
+      fetch(`${API_PROXY}?endpoint=position&session_key=latest&date>${timeWindow}`),
+      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest&date>${timeWindow}`),
+      fetch(`${API_PROXY}?endpoint=laps&session_key=latest&date>${timeWindow}`),
+      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`) // Stints is tiny, safe to fetch all
     ]);
 
     const posData = await posRes.json();
@@ -321,15 +325,18 @@ async function pollTimingData() {
 
     if(!Array.isArray(posData)) return;
 
-    const driverStats = {};
+    // 2. Global Cache: Store stats globally so drivers don't disappear from the 
+    // table if they haven't crossed a timing line in the last 2.5 minutes
+    window.driverStatsCache = window.driverStatsCache || {};
+    const driverStats = window.driverStatsCache;
     
-    // 1. Map Positions
+    // Map Positions
     posData.forEach(p => { 
       if(!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
       driverStats[p.driver_number].pos = p.position; 
     });
     
-    // 2. Map Intervals & Gaps
+    // Map Intervals & Gaps
     if (Array.isArray(intData)) {
       intData.forEach(i => { 
         if(driverStats[i.driver_number]) {
@@ -339,7 +346,7 @@ async function pollTimingData() {
       });
     }
 
-    // 3. Map Lap Times
+    // Map Lap Times
     if (Array.isArray(lapsData)) {
       lapsData.forEach(l => { 
         if(driverStats[l.driver_number] && l.lap_duration) {
@@ -348,13 +355,14 @@ async function pollTimingData() {
       });
     }
 
-    // 4. Map Tyre Stints
+    // Map Tyre Stints
     if (Array.isArray(stintsData)) {
       // Sort so highest stint number is processed first (active stint)
       stintsData.sort((a,b) => b.stint_number - a.stint_number);
       stintsData.forEach(s => {
-        if(driverStats[s.driver_number] && !driverStats[s.driver_number].tyre) {
+        if(driverStats[s.driver_number] && (!driverStats[s.driver_number].stint_num || s.stint_number >= driverStats[s.driver_number].stint_num)) {
           driverStats[s.driver_number].tyre = s.compound ? s.compound.toLowerCase() : 'unknown';
+          driverStats[s.driver_number].stint_num = s.stint_number;
         }
       });
     }
