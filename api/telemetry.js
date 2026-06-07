@@ -1,44 +1,29 @@
-// Cache the token in serverless memory to prevent spamming the OpenF1 auth server
+// Cache the token in serverless memory
 let cachedToken = null;
 let tokenExpiry = 0;
 
 async function getOpenF1Token() {
-  // Reuse the token if it exists and hasn't expired (with a 60-second safety buffer)
-  if (cachedToken && Date.now() < tokenExpiry - 60000) {
-    return cachedToken;
-  }
+  if (cachedToken && Date.now() < tokenExpiry - 60000) return cachedToken;
 
   const username = process.env.OPENF1_USERNAME;
   const password = process.env.OPENF1_PASSWORD;
 
-  if (!username || !password) {
-    console.error('OpenF1 credentials missing from Vercel Environment Variables.');
-    return null;
-  }
+  if (!username || !password) return null;
 
   try {
-    const tokenUrl = "https://api.openf1.org/token";
-    
-    // OpenF1 strictly requires application/x-www-form-urlencoded
     const params = new URLSearchParams();
     params.append("username", username);
     params.append("password", password);
 
-    const response = await fetch(tokenUrl, {
+    const response = await fetch("https://api.openf1.org/token", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: params,
     });
 
-    if (!response.ok) {
-        throw new Error(`Auth failed: ${response.status} ${await response.text()}`);
-    }
+    if (!response.ok) throw new Error(`Auth failed: ${response.status}`);
 
     const tokenData = await response.json();
-    
-    // Save the token and calculate expiry time
     cachedToken = tokenData.access_token;
     const expiresInSeconds = parseInt(tokenData.expires_in) || 3600;
     tokenExpiry = Date.now() + (expiresInSeconds * 1000);
@@ -52,41 +37,56 @@ async function getOpenF1Token() {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=2'); // Micro-cache to prevent frontend spam
+  // Cache for 5 seconds at the edge to absorb frontend polling
+  res.setHeader('Cache-Control', 's-maxage=5'); 
 
   const { endpoint, ...queryParams } = req.query;
-
-  if (!endpoint) {
-    return res.status(400).json({ error: 'Missing endpoint parameter' });
-  }
-
-  const qs = new URLSearchParams(queryParams).toString();
-  const targetUrl = `https://api.openf1.org/v1/${endpoint}?${qs}`;
+  if (!endpoint) return res.status(400).json({ error: 'Missing endpoint parameter' });
 
   try {
-    // 1. Authenticate
     const token = await getOpenF1Token();
-    
     const headers = { 'accept': 'application/json' };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    // 2. Fetch the live telemetry data from OpenF1
-    const response = await fetch(targetUrl, { headers });
-    
-    if (!response.ok) {
-      if (response.status === 401) {
-        return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    // Helper to fetch OpenF1 and translate our safe 'timeWindow' param to their 'date>=' format
+    const fetchOpenF1 = async (path, qsObj = {}) => {
+      const finalQs = {};
+      for (const key in qsObj) {
+        if (key === 'timeWindow') finalQs['date>='] = qsObj[key];
+        else finalQs[key] = qsObj[key];
       }
-      return res.status(response.status).json({ error: `OpenF1 Error: ${response.status}` });
-    }
+      const qsString = new URLSearchParams(finalQs).toString();
+      
+      const response = await fetch(`https://api.openf1.org/v1/${path}?${qsString}`, { headers });
+      
+      if (!response.ok) {
+        if (response.status === 401) throw new Error('AUTH_REQUIRED');
+        if (response.status === 429) throw new Error('RATE_LIMITED');
+        throw new Error(`OpenF1 Error: ${response.status}`);
+      }
+      return response.json();
+    };
 
-    const data = await response.json();
-    res.status(200).json(data);
+    // THE FIX: Combine the 4 timing endpoints into 1 backend request to prevent 429s
+    if (endpoint === 'timing') {
+      const [pos, int, laps, stints] = await Promise.all([
+        fetchOpenF1('position', queryParams),
+        fetchOpenF1('intervals', queryParams),
+        fetchOpenF1('laps', queryParams),
+        fetchOpenF1('stints', { session_key: queryParams.session_key || 'latest' })
+      ]);
+      return res.status(200).json({ pos, int, laps, stints });
+    } 
+    
+    // Pass through standard single requests (sessions, drivers, location)
+    else {
+      const data = await fetchOpenF1(endpoint, queryParams);
+      return res.status(200).json(data);
+    }
     
   } catch (error) {
-    console.error('Telemetry Proxy Error:', error);
+    if (error.message === 'RATE_LIMITED') return res.status(429).json({ error: 'Rate limited by OpenF1' });
+    if (error.message === 'AUTH_REQUIRED') return res.status(401).json({ error: 'AUTH_REQUIRED' });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }

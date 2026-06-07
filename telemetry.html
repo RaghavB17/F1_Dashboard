@@ -146,12 +146,26 @@ let minY = Infinity, maxY = -Infinity;
 let trackScale = 1, offsetX = 0, offsetY = 0;
 let isPolling = false;
 
-// Global Cache prevents UI flickering
 window.driverStatsCache = {};
 let driverDictionary = {};
 
 function scaleX(x) { return offsetX + ((x - minX) * trackScale); }
 function scaleY(y) { return offsetY + ((y - minY) * trackScale); }
+
+// THE FIX: Rounds the current time down to the nearest 5 seconds. 
+// This guarantees the Vercel CDN caches the request and protects OpenF1.
+function getRoundedTimeWindow(offsetSeconds) {
+  const roundedMs = Math.floor(Date.now() / 5000) * 5000;
+  return new Date(roundedMs - (offsetSeconds * 1000)).toISOString();
+}
+
+const teamColors = {
+  1: '#3671C6', 11: '#3671C6', 44: '#27F4D2', 63: '#27F4D2',
+  16: '#E8002D', 55: '#E8002D', 4: '#FF8000', 81: '#FF8000',
+  14: '#229971', 18: '#229971', 10: '#0093CC', 31: '#0093CC',
+  23: '#64C4FF', 2: '#64C4FF', 22: '#6692FF', 3: '#6692FF',
+  77: '#00877C', 24: '#00877C', 20: '#B6BABD', 27: '#B6BABD'
+};
 
 async function initTelemetry() {
   const statusEl = document.getElementById('connStatus');
@@ -171,7 +185,6 @@ async function initTelemetry() {
       if (Date.now() > endTime.getTime()) isLive = false;
       document.getElementById('sessionInfo').textContent = `${session.session_name.toUpperCase()} · ${session.country_name.toUpperCase()}`;
       
-      // Calculate a 15-minute window from the start of the session to safely draw the map
       const sessionStart = new Date(session.date_start);
       sessionStartPlus15 = new Date(sessionStart.getTime() + 15 * 60000).toISOString();
     }
@@ -191,10 +204,8 @@ async function initTelemetry() {
     }
 
     statusEl.textContent = 'GENERATING CIRCUIT MAP...';
-    
-    // THE FIX: Restrict the map fetch to the first 15 mins to prevent 4.5MB Vercel Crash
     const traceDriver = driversList.length > 0 ? driversList[0].driver_number : 1;
-    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=${traceDriver}&date<=${sessionStartPlus15}`);
+    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=${traceDriver}&timeWindow=${sessionStartPlus15}`);
     const locData = await locRes.json();
     
     if (locData && Array.isArray(locData) && locData.length > 0 && !locData.error) {
@@ -239,8 +250,9 @@ async function initTelemetry() {
     pollCarPositions();
     pollTimingData();
     
-    setInterval(pollCarPositions, 3000); 
-    setInterval(pollTimingData, 6000);  
+    // Offset the intervals slightly so they don't fire at the exact same moment
+    setInterval(pollCarPositions, 5000); 
+    setTimeout(() => setInterval(pollTimingData, 10000), 2000);
 
   } catch (error) {
     statusEl.textContent = 'ERROR INITIATING TELEMETRY FEED';
@@ -252,9 +264,8 @@ async function initTelemetry() {
 async function pollCarPositions() {
   if (!isPolling) return;
   try {
-    // THE FIX: Proper query string syntax ensures the payload is extremely small
-    const timeString = new Date(Date.now() - 10000).toISOString();
-    const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&date>=${timeString}`);
+    const timeWin = getRoundedTimeWindow(15); // Look back 15 seconds safely
+    const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&timeWindow=${timeWin}`);
     const data = await res.json();
     
     if (!Array.isArray(data)) return;
@@ -297,39 +308,32 @@ async function pollCarPositions() {
       label.setAttribute('y', sy + 60);
     });
   } catch (e) {
-    console.warn("Location packet refresh skipped", e);
+    console.warn("Location refresh dropped due to limits", e);
   }
 }
 
 async function pollTimingData() {
   if (!isPolling) return;
   try {
-    // THE FIX: Constrain all table data to the last 2.5 minutes
-    const timeWindow = new Date(Date.now() - 150000).toISOString();
+    const timeWin = getRoundedTimeWindow(150); // Rolling 2.5 min window
+    
+    // Fetch the SINGLE aggregated endpoint from your Vercel backend
+    const res = await fetch(`${API_PROXY}?endpoint=timing&session_key=latest&timeWindow=${timeWin}`);
+    
+    if (!res.ok) throw new Error('Timing fetch failed');
+    const { pos, int, laps, stints } = await res.json();
 
-    const [posRes, intRes, lapsRes, stintsRes] = await Promise.all([
-      fetch(`${API_PROXY}?endpoint=position&session_key=latest&date>=${timeWindow}`),
-      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest&date>=${timeWindow}`),
-      fetch(`${API_PROXY}?endpoint=laps&session_key=latest&date>=${timeWindow}`),
-      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`) 
-    ]);
-
-    const posData = await posRes.json();
-    const intData = await intRes.json();
-    const lapsData = await lapsRes.json();
-    const stintsData = await stintsRes.json();
-
-    if(!Array.isArray(posData)) return;
+    if(!Array.isArray(pos)) return;
 
     const driverStats = window.driverStatsCache;
     
-    posData.forEach(p => { 
+    pos.forEach(p => { 
       if(!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
       driverStats[p.driver_number].pos = p.position; 
     });
     
-    if (Array.isArray(intData)) {
-      intData.forEach(i => { 
+    if (Array.isArray(int)) {
+      int.forEach(i => { 
         if(driverStats[i.driver_number]) {
           driverStats[i.driver_number].interval = i.interval; 
           driverStats[i.driver_number].gap = i.gap_to_leader;
@@ -337,17 +341,17 @@ async function pollTimingData() {
       });
     }
 
-    if (Array.isArray(lapsData)) {
-      lapsData.forEach(l => { 
+    if (Array.isArray(laps)) {
+      laps.forEach(l => { 
         if(driverStats[l.driver_number] && l.lap_duration) {
           driverStats[l.driver_number].lap_time = l.lap_duration; 
         }
       });
     }
 
-    if (Array.isArray(stintsData)) {
-      stintsData.sort((a,b) => b.stint_number - a.stint_number);
-      stintsData.forEach(s => {
+    if (Array.isArray(stints)) {
+      stints.sort((a,b) => b.stint_number - a.stint_number);
+      stints.forEach(s => {
         if(driverStats[s.driver_number] && (!driverStats[s.driver_number].stint_num || s.stint_number >= driverStats[s.driver_number].stint_num)) {
           driverStats[s.driver_number].tyre = s.compound ? s.compound.toLowerCase() : 'unknown';
           driverStats[s.driver_number].stint_num = s.stint_number;
