@@ -36,14 +36,7 @@ const shortDriverName = driver => `${(driver?.givenName || '').charAt(0)}. ${dri
 const teamId = constructor => (constructor?.constructorId || '').replace(/\s+/g, '_').toLowerCase();
 
 function parseQualifying(data) {
-  const races = getRaces(data);
-  const race = races
-    .filter(item => item?.QualifyingResults?.length)
-    .sort((a, b) => {
-      const dateDifference = Date.parse(a.date || '') - Date.parse(b.date || '');
-      return dateDifference || (parseInt(a.round, 10) || 0) - (parseInt(b.round, 10) || 0);
-    })
-    .pop() || null;
+  const race = getRaces(data).find(item => item?.QualifyingResults?.length) || null;
   const results = race?.QualifyingResults || [];
   if (!results.length) return null;
 
@@ -148,14 +141,13 @@ export default async function handler(req, res) {
     if (token) openF1Headers.Authorization = `Bearer ${token}`;
 
     const [
-      driversData, constructorsData, scheduleData, lastRaceData, qualifyingData, winnersData,
+      driversData, constructorsData, scheduleData, lastRaceData, winnersData,
       sessionData, weatherData, stintData, openF1Drivers, positionData
     ] = await Promise.all([
       fetchJson('https://api.jolpi.ca/ergast/f1/current/driverStandings.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/constructorStandings.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/last/results.json'),
-      fetchJson('https://api.jolpi.ca/ergast/f1/current/qualifying.json?limit=2000'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/results/1.json?limit=100'),
       fetchJson('https://api.openf1.org/v1/sessions?session_key=latest', openF1Headers),
       fetchJson('https://api.openf1.org/v1/weather?session_key=latest', openF1Headers),
@@ -212,11 +204,19 @@ export default async function handler(req, res) {
       };
     });
     const next_race = schedule.find(race => race.status === 'upcoming') || null;
+    const lastRace = getRaces(lastRaceData)[0];
 
-    const qualifying = parseQualifying(qualifyingData);
+    const [nextRaceQualifying, lastRaceQualifying] = await Promise.all([
+      next_race?.round
+        ? fetchJson(`https://api.jolpi.ca/ergast/f1/current/${next_race.round}/qualifying.json`)
+        : null,
+      lastRace?.round
+        ? fetchJson(`https://api.jolpi.ca/ergast/f1/current/${lastRace.round}/qualifying.json`)
+        : null
+    ]);
+    const qualifying = parseQualifying(nextRaceQualifying) || parseQualifying(lastRaceQualifying);
     const latest_session = buildLatestSession(sessionData, weatherData, stintData, openF1Drivers, positionData);
 
-    const lastRace = getRaces(lastRaceData)[0];
     let last_race = null;
     if (lastRace) {
       const podium = (lastRace.Results || []).slice(0, 3).map(result => ({
