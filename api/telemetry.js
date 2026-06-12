@@ -41,7 +41,6 @@ async function getOpenF1Token() {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  // Cache at the edge for 5 seconds to absorb polling and protect OpenF1 rate limits
   res.setHeader('Cache-Control', 's-maxage=5'); 
 
   const { endpoint, ...queryParams } = req.query;
@@ -66,14 +65,12 @@ export default async function handler(req, res) {
       
       if (!response.ok) {
         console.error(`[PROXY ERROR] ${url} -> HTTP ${response.status}`);
-        if (response.status === 401) throw new Error('AUTH_REQUIRED');
-        if (response.status === 429) throw new Error('RATE_LIMITED');
-        throw new Error(`OpenF1 Error: ${response.status}`);
+        // THE FIX: Graceful fallback so a single endpoint failure doesn't crash the whole UI
+        return []; 
       }
       return response.json();
     };
 
-    // Aggregate 4 requests into 1 to save client bandwidth and adhere to limits
     if (endpoint === 'timing') {
       console.log('[PROXY] Initiating aggregated timing fetch...');
       const [pos, int, laps, stints] = await Promise.all([
@@ -91,8 +88,6 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     console.error('[PROXY CRITICAL ERROR]', error.message);
-    if (error.message === 'RATE_LIMITED') return res.status(429).json({ error: 'Rate limited by OpenF1' });
-    if (error.message === 'AUTH_REQUIRED') return res.status(401).json({ error: 'AUTH_REQUIRED' });
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }

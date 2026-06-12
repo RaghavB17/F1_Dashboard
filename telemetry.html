@@ -139,11 +139,13 @@ async function initTelemetry() {
     
     if (Array.isArray(driversList)) {
       driversList.forEach(d => {
-        driverDictionary[d.driver_number] = {
-          acronym: d.name_acronym || d.last_name.substring(0,3).toUpperCase(),
-          name: d.last_name,
-          color: '#' + (d.team_colour || 'ffffff')
-        };
+        if (d.driver_number != null) {
+          driverDictionary[d.driver_number] = {
+            acronym: d.name_acronym || d.last_name.substring(0,3).toUpperCase(),
+            name: d.last_name,
+            color: '#' + (d.team_colour || 'ffffff')
+          };
+        }
       });
     }
 
@@ -177,36 +179,40 @@ async function pollTimingData() {
     if (!res.ok) throw new Error('Timing fetch failed');
     const { pos, int, laps, stints } = await res.json();
 
-    if(!Array.isArray(pos)) return;
-
     const driverStats = window.driverStatsCache;
     
-    pos.forEach(p => { 
-      if(!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
-      driverStats[p.driver_number].pos = p.position; 
-    });
+    // THE FIX: Strict null checks prevent OpenF1 errors from creating "undefined" drivers
+    if (Array.isArray(pos)) {
+      pos.forEach(p => { 
+        if (p == null || p.driver_number == null) return;
+        if (!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
+        driverStats[p.driver_number].pos = p.position; 
+      });
+    }
     
     if (Array.isArray(int)) {
       int.forEach(i => { 
-        if(driverStats[i.driver_number]) {
-          driverStats[i.driver_number].interval = i.interval; 
-          driverStats[i.driver_number].gap = i.gap_to_leader;
-        }
+        if (i == null || i.driver_number == null) return;
+        if (!driverStats[i.driver_number]) driverStats[i.driver_number] = {};
+        driverStats[i.driver_number].interval = i.interval; 
+        driverStats[i.driver_number].gap = i.gap_to_leader;
       });
     }
 
     if (Array.isArray(laps)) {
       laps.forEach(l => { 
-        if(driverStats[l.driver_number] && l.lap_duration) {
-          driverStats[l.driver_number].lap_time = l.lap_duration; 
-        }
+        if (l == null || l.driver_number == null) return;
+        if (!driverStats[l.driver_number]) driverStats[l.driver_number] = {};
+        if (l.lap_duration) driverStats[l.driver_number].lap_time = l.lap_duration; 
       });
     }
 
     if (Array.isArray(stints)) {
-      stints.sort((a,b) => b.stint_number - a.stint_number);
+      stints.sort((a,b) => (b.stint_number || 0) - (a.stint_number || 0));
       stints.forEach(s => {
-        if(driverStats[s.driver_number] && (!driverStats[s.driver_number].stint_num || s.stint_number >= driverStats[s.driver_number].stint_num)) {
+        if (s == null || s.driver_number == null) return;
+        if (!driverStats[s.driver_number]) driverStats[s.driver_number] = {};
+        if (!driverStats[s.driver_number].stint_num || s.stint_number >= driverStats[s.driver_number].stint_num) {
           driverStats[s.driver_number].tyre = s.compound ? s.compound.toLowerCase() : 'unknown';
           driverStats[s.driver_number].stint_num = s.stint_number;
         }

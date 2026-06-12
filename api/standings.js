@@ -56,6 +56,7 @@ export default async function handler(req, res) {
       }
     };
 
+    // THE FIX: Exactly 9 variables matching 9 fetches
     const [
       driversData, consData, schedData, lastRaceData, allQualiData, 
       openf1Weather, openf1Stints, openf1Session, winnersData
@@ -64,7 +65,7 @@ export default async function handler(req, res) {
       fetchJson('https://api.jolpi.ca/ergast/f1/current/constructorStandings.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/last/results.json'),
-      fetchJson('https://api.jolpi.ca/ergast/f1/current/qualifying.json'), // Fetch all qualis to get true latest
+      fetchJson('https://api.jolpi.ca/ergast/f1/current/qualifying.json'),
       fetchJson('https://api.openf1.org/v1/weather?session_key=latest', openF1Headers),
       fetchJson('https://api.openf1.org/v1/stints?session_key=latest', openF1Headers),
       fetchJson('https://api.openf1.org/v1/sessions?session_key=latest', openF1Headers),
@@ -106,7 +107,6 @@ export default async function handler(req, res) {
     }));
     const next_race = schedule.find(r => r.status === 'upcoming') || null;
 
-    // DECOUPLED QUALIFYING:
     let qualifying = null;
     const allQualis = getRaces(allQualiData);
     const latestQualiRace = allQualis.length > 0 ? allQualis[allQualis.length - 1] : null;
@@ -126,7 +126,6 @@ export default async function handler(req, res) {
       };
     }
 
-    // DECOUPLED WEATHER & STINTS
     let weather = null;
     if (openf1Weather && Array.isArray(openf1Weather) && openf1Weather.length > 0) {
       const w = openf1Weather[openf1Weather.length - 1];
@@ -155,7 +154,6 @@ export default async function handler(req, res) {
       stints = stintMap;
     }
 
-    // Last Race
     let last_race = null;
     const lrData = getRaces(lastRaceData)[0];
     if (lrData) {
