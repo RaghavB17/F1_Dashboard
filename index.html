@@ -2621,7 +2621,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
 <section class="race-extra-section" id="raceExtraSection">
   <div class="race-extra-grid">
     <div class="weather-card" id="weatherCard">
-      <div class="weather-head"><span>Last Race &middot; <em>Conditions</em></span><span id="weatherWhen">—</span></div>
+      <div class="weather-head"><span>Latest Session &middot; <em>Conditions</em></span><span id="weatherWhen">—</span></div>
       <div class="weather-stats" id="weatherStats">
         <div class="weather-stat"><div class="ws-label">Air Temp</div><div class="ws-value">—</div></div>
         <div class="weather-stat"><div class="ws-label">Track Temp</div><div class="ws-value">—</div></div>
@@ -2630,7 +2630,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
       </div>
     </div>
     <div class="stints-card" id="stintsCard">
-      <div class="stints-head"><span class="sh-title">Tire Strategy &middot; <em>Top Finishers</em></span><span id="stintsMeta">soft / medium / hard / inters / wet</span></div>
+      <div class="stints-head"><span class="sh-title">Tire Strategy &middot; <em>Session Leaders</em></span><span id="stintsMeta">soft / medium / hard / inters / wet</span></div>
       <div id="stintsBody"></div>
       <div class="stint-legend">
         <span class="sl-item"><span class="sl-dot" style="background:#ff7575;"></span>soft</span>
@@ -2712,7 +2712,7 @@ const API_URL = (function () {
   return '/api/standings';
 })();
 const STORAGE_KEY = 'pit-wall:v1';
-const POLL_MS     = 10 * 60 * 1000;
+const POLL_MS     = 5 * 60 * 1000;
 const COUNTRY_FALLBACK = '🏁';
 
 /* country -> flag emoji */
@@ -3562,13 +3562,14 @@ function renderWeather(data) {
   const stats = $('weatherStats');
   const when = $('weatherWhen');
   if (!stats) return;
-  const w = data && data.last_race && data.last_race.weather;
+  const session = data && data.latest_session;
+  const w = session && session.weather;
   if (!w) {
     stats.innerHTML = `<div class="weather-stat"><div class="ws-label">Air Temp</div><div class="ws-value">—</div></div>
       <div class="weather-stat"><div class="ws-label">Track Temp</div><div class="ws-value">—</div></div>
       <div class="weather-stat"><div class="ws-label">Humidity</div><div class="ws-value">—</div></div>
       <div class="weather-stat"><div class="ws-label">Rain</div><div class="ws-value">—</div></div>`;
-    if (when) when.textContent = data.last_race ? (data.last_race.short_name || '—') : 'no data';
+    if (when) when.textContent = session ? (session.label || 'latest session') : 'no data';
     return;
   }
   stats.innerHTML = `
@@ -3577,24 +3578,23 @@ function renderWeather(data) {
     <div class="weather-stat"><div class="ws-label">Humidity</div><div class="ws-value">${w.humidity != null ? Math.round(w.humidity) : '—'}<small>%</small></div></div>
     <div class="weather-stat"><div class="ws-label">Rain</div><div class="ws-value">${w.rain_pct != null ? w.rain_pct : '—'}<small>%</small></div></div>
   `;
-  if (when) when.textContent = data.last_race ? data.last_race.short_name : '—';
+  if (when) when.textContent = session.label || 'latest session';
 }
 
 function renderStints(data) {
   const body = $('stintsBody');
   if (!body) return;
-  const s = data && data.last_race && data.last_race.stints;
+  const s = data && data.latest_session && data.latest_session.stints;
   if (!s || !s.drivers || !s.drivers.length) {
     body.innerHTML = '<div style="color:var(--ink-3); font-size:12px; letter-spacing:.14em; text-transform:uppercase; padding:8px 0;">tire data not available yet</div>';
     return;
   }
-  const total = s.total_laps || 1;
   body.innerHTML = s.drivers.map(d => {
     const segs = d.stints.map(st => {
       const compoundClass = ['soft','medium','hard','intermediate','wet'].includes(st.compound) ? st.compound : 'unknown';
-      const w = (st.laps / total) * 100;
       const label = st.compound ? st.compound.charAt(0).toUpperCase() : '?';
-      return `<div class="stint-seg ${compoundClass}" style="flex: ${st.laps};" title="${st.compound || 'unknown'} · laps ${st.lap_start}-${st.lap_end} (${st.laps})">${st.laps >= 3 ? label : ''}</div>`;
+      const stintLabel = st.laps >= 5 ? `${label} ${st.laps}L` : `${st.laps}`;
+      return `<div class="stint-seg ${compoundClass}" style="flex: ${st.laps};" title="${st.compound || 'unknown'} · laps ${st.lap_start}-${st.lap_end} (${st.laps} laps)">${stintLabel}</div>`;
     }).join('');
     return `<div class="stint-row">
       <div class="sr-driver">${d.code || '#' + d.num}<small>${d.driver}</small></div>
@@ -4068,12 +4068,12 @@ function renderQualifying(data) {
   const title = $('qualiTitle');
   const meta = $('qualiMeta');
   if (!body) return;
-  const q = data.last_race && data.last_race.qualifying;
+  const q = data && data.qualifying;
   if (!q || !q.results || !q.results.length) {
     body.innerHTML = '<div style="grid-column: 1 / -1; padding: 12px 0; color: var(--ink-3); font-size: 12px; letter-spacing:.14em; text-transform: uppercase;">qualifying data not available yet</div>';
     return;
   }
-  if (title) title.textContent = `${data.last_race.short_name} Qualifying`;
+  if (title) title.textContent = `${q.short_name} Qualifying`;
   if (meta) meta.textContent = q.pole ? `pole · ${q.pole.driver_short} · ${q.pole.time || ''}`.toLowerCase() : 'pole · best Q3';
 
   const poleTime = q.pole && q.pole.time ? toMs(q.pole.time) : null;
