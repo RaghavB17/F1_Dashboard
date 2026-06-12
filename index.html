@@ -3559,46 +3559,48 @@ function hideSplash() {
 }
 
 function renderWeather(data) {
-  const w = data.weather;
-  const container = $('weatherData');
+  const stats = $('weatherStats');
   const when = $('weatherWhen');
+  if (!stats) return;
+  const w = data && data.last_race && data.last_race.weather;
   if (!w) {
-    if (container) container.innerHTML = '<div class="w-row" style="color:var(--ink-2); font-style:italic; justify-content:center; padding:12px 0;">No session data available</div>';
-    if (when) when.textContent = 'NO DATA';
+    stats.innerHTML = `<div class="weather-stat"><div class="ws-label">Air Temp</div><div class="ws-value">—</div></div>
+      <div class="weather-stat"><div class="ws-label">Track Temp</div><div class="ws-value">—</div></div>
+      <div class="weather-stat"><div class="ws-label">Humidity</div><div class="ws-value">—</div></div>
+      <div class="weather-stat"><div class="ws-label">Rain</div><div class="ws-value">—</div></div>`;
+    if (when) when.textContent = data.last_race ? (data.last_race.short_name || '—') : 'no data';
     return;
   }
-  if (when) when.textContent = w.session_name.toUpperCase();
-  if (container) {
-    container.innerHTML = `
-      <div class="w-row"><div class="w-label">Air Temp</div><div class="w-val">${w.air_temp}°C</div></div>
-      <div class="w-row"><div class="w-label">Track Temp</div><div class="w-val">${w.track_temp}°C</div></div>
-      <div class="w-row"><div class="w-label">Humidity</div><div class="w-val">${w.humidity}%</div></div>
-      <div class="w-row"><div class="w-label">Rain Risk</div><div class="w-val">${w.rain_pct}%</div></div>
-    `;
-  }
+  stats.innerHTML = `
+    <div class="weather-stat"><div class="ws-label">Air Temp</div><div class="ws-value">${w.air_temp != null ? w.air_temp.toFixed(1) : '—'}<small>°C</small></div></div>
+    <div class="weather-stat"><div class="ws-label">Track Temp</div><div class="ws-value">${w.track_temp != null ? w.track_temp.toFixed(1) : '—'}<small>°C</small></div></div>
+    <div class="weather-stat"><div class="ws-label">Humidity</div><div class="ws-value">${w.humidity != null ? Math.round(w.humidity) : '—'}<small>%</small></div></div>
+    <div class="weather-stat"><div class="ws-label">Rain</div><div class="ws-value">${w.rain_pct != null ? w.rain_pct : '—'}<small>%</small></div></div>
+  `;
+  if (when) when.textContent = data.last_race ? data.last_race.short_name : '—';
 }
 
 function renderStints(data) {
-  const st = data.stints;
-  const container = $('tyreData');
-  if (!st || Object.keys(st).length === 0) {
-    if (container) container.innerHTML = '<div style="color:var(--ink-2); font-size:12px; font-style:italic; padding:12px;">No stint data available for latest session.</div>';
+  const body = $('stintsBody');
+  if (!body) return;
+  const s = data && data.last_race && data.last_race.stints;
+  if (!s || !s.drivers || !s.drivers.length) {
+    body.innerHTML = '<div style="color:var(--ink-3); font-size:12px; letter-spacing:.14em; text-transform:uppercase; padding:8px 0;">tire data not available yet</div>';
     return;
   }
-  const totals = { SOFT: 0, MEDIUM: 0, HARD: 0, INTERMEDIATE: 0, WET: 0, UNKNOWN: 0 };
-  Object.values(st).forEach(s => {
-    const c = (s.compound || 'UNKNOWN').toUpperCase();
-    if (totals[c] !== undefined) totals[c]++; else totals.UNKNOWN++;
-  });
-  if (container) {
-    container.innerHTML = `
-      <div class="tyre-row"><div class="t-compound"><span class="t-color" style="background:#ff4d4d;"></span>Soft</div><div class="t-count">${totals.SOFT}</div></div>
-      <div class="tyre-row"><div class="t-compound"><span class="t-color" style="background:#ffd700;"></span>Medium</div><div class="t-count">${totals.MEDIUM}</div></div>
-      <div class="tyre-row"><div class="t-compound"><span class="t-color" style="background:#ffffff; border:1px solid #ccc;"></span>Hard</div><div class="t-count">${totals.HARD}</div></div>
-      <div class="tyre-row"><div class="t-compound"><span class="t-color" style="background:#00cc66;"></span>Inter</div><div class="t-count">${totals.INTERMEDIATE}</div></div>
-      <div class="tyre-row"><div class="t-compound"><span class="t-color" style="background:#3385ff;"></span>Wet</div><div class="t-count">${totals.WET}</div></div>
-    `;
-  }
+  const total = s.total_laps || 1;
+  body.innerHTML = s.drivers.map(d => {
+    const segs = d.stints.map(st => {
+      const compoundClass = ['soft','medium','hard','intermediate','wet'].includes(st.compound) ? st.compound : 'unknown';
+      const w = (st.laps / total) * 100;
+      const label = st.compound ? st.compound.charAt(0).toUpperCase() : '?';
+      return `<div class="stint-seg ${compoundClass}" style="flex: ${st.laps};" title="${st.compound || 'unknown'} · laps ${st.lap_start}-${st.lap_end} (${st.laps})">${st.laps >= 3 ? label : ''}</div>`;
+    }).join('');
+    return `<div class="stint-row">
+      <div class="sr-driver">${d.code || '#' + d.num}<small>${d.driver}</small></div>
+      <div class="stint-track">${segs}</div>
+    </div>`;
+  }).join('');
 }
 
 let __deferredPrompt = null;
@@ -4062,40 +4064,40 @@ async function renderSpotlight(data, cfg) {
 }
 
 function renderQualifying(data) {
-  const q = data.qualifying;
-  const list = $('qrList');
-  const title = $('qrTitle');
+  const body = $('qualiBody');
+  const title = $('qualiTitle');
+  const meta = $('qualiMeta');
+  if (!body) return;
+  const q = data.last_race && data.last_race.qualifying;
   if (!q || !q.results || !q.results.length) {
-    if (list) list.innerHTML = '<div class="qr-row" style="color:var(--ink-2); font-style:italic; padding:12px;">Qualifying data not available.</div>';
-    if (title) title.textContent = 'Qualifying';
+    body.innerHTML = '<div style="grid-column: 1 / -1; padding: 12px 0; color: var(--ink-3); font-size: 12px; letter-spacing:.14em; text-transform: uppercase;">qualifying data not available yet</div>';
     return;
   }
+  if (title) title.textContent = `${data.last_race.short_name} Qualifying`;
+  if (meta) meta.textContent = q.pole ? `pole · ${q.pole.driver_short} · ${q.pole.time || ''}`.toLowerCase() : 'pole · best Q3';
 
-  if (title) title.textContent = `${q.short_name} Qualifying`;
-
-  const bestOverall = q.pole.time;
-  const bestMs = toMs(bestOverall);
-
-  list.innerHTML = `
-    <div class="qr-head">
-      <div class="qr-cell">Driver</div>
-      <div class="qr-cell qr-q1">Q1</div>
-      <div class="qr-cell qr-q2">Q2</div>
-      <div class="qr-cell qr-q3">Q3</div>
-      <div class="qr-cell qr-time">Gap</div>
-    </div>
-    ${q.results.map(r => {
-      const col = `var(--team-${r.team_id}, #666)`;
-      const bMs = toMs(r.time);
-      let gap = '';
-      if (r.pos === 1) {
-        gap = 'Pole';
-      } else if (bMs && bestMs) {
-        const diff = (bMs - bestMs) / 1000;
-        gap = diff > 0 ? `+${diff.toFixed(3)}` : '';
-      } else gap = '—';
-
-      return `<div class="qr-row">
+  const poleTime = q.pole && q.pole.time ? toMs(q.pole.time) : null;
+  body.innerHTML = `
+    <div class="qh qh-driver">Driver</div>
+    <div class="qh qh-q1">Q1</div>
+    <div class="qh qh-q2">Q2</div>
+    <div class="qh qh-q3">Q3</div>
+    <div class="qh qh-time">Gap</div>
+    ${q.results.map((r, i) => {
+      const col = teamColor(r.team_id);
+      const best = r.best || '—';
+      let gap = '—';
+      if (poleTime && r.best) {
+        const ms = toMs(r.best);
+        if (ms != null) {
+          if (i === 0) gap = best;
+          else {
+            const d = (ms - poleTime) / 1000;
+            gap = `+${d.toFixed(3)}`;
+          }
+        }
+      }
+      return `<div class="qr-row${i === 0 ? ' is-pole' : ''}">
         <div class="qr-cell qr-driver">
           <span class="qr-pos">${pad(r.pos)}</span>
           <span class="qr-team-stripe" style="--qr-color:${col};"></span>
@@ -4109,7 +4111,6 @@ function renderQualifying(data) {
     }).join('')}
   `;
 }
-
 function toMs(t) {
   if (!t) return null;
   const m = String(t).match(/^(?:(\d+):)?(\d+)\.(\d+)$/);
