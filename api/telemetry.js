@@ -46,16 +46,25 @@ async function fetchOpenF1(endpoint, query, headers) {
   return response.json();
 }
 
+async function fetchOptionalOpenF1(endpoint, query, headers) {
+  try {
+    return await fetchOpenF1(endpoint, query, headers);
+  } catch (error) {
+    console.warn(`Optional OpenF1 ${endpoint} feed unavailable:`, error.message);
+    return [];
+  }
+}
+
 async function fetchTiming(query, headers) {
   const sessionKey = query.session_key || 'latest';
   const recentQuery = { session_key: sessionKey };
   if (query['date>=']) recentQuery['date>='] = query['date>='];
 
   const [positions, intervals, laps, stints] = await Promise.all([
-    fetchOpenF1('position', { session_key: sessionKey }, headers),
-    fetchOpenF1('intervals', recentQuery, headers),
-    fetchOpenF1('laps', { session_key: sessionKey }, headers),
-    fetchOpenF1('stints', { session_key: sessionKey }, headers)
+    fetchOptionalOpenF1('position', { session_key: sessionKey }, headers),
+    fetchOptionalOpenF1('intervals', recentQuery, headers),
+    fetchOptionalOpenF1('laps', { session_key: sessionKey }, headers),
+    fetchOptionalOpenF1('stints', { session_key: sessionKey }, headers)
   ]);
 
   const latestPosition = latestByDriver(positions, (a, b) => recordTime(a) - recordTime(b));

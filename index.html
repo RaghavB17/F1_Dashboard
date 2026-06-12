@@ -3589,13 +3589,12 @@ function renderStints(data) {
     body.innerHTML = '<div style="color:var(--ink-3); font-size:12px; letter-spacing:.14em; text-transform:uppercase; padding:8px 0;">tire data not available yet</div>';
     return;
   }
-  const total = s.total_laps || 1;
   body.innerHTML = s.drivers.map(d => {
     const segs = d.stints.map(st => {
       const compoundClass = ['soft','medium','hard','intermediate','wet'].includes(st.compound) ? st.compound : 'unknown';
-      const w = (st.laps / total) * 100;
       const label = st.compound ? st.compound.charAt(0).toUpperCase() : '?';
-      return `<div class="stint-seg ${compoundClass}" style="flex: ${st.laps};" title="${st.compound || 'unknown'} · laps ${st.lap_start}-${st.lap_end} (${st.laps})">${st.laps >= 3 ? label : ''}</div>`;
+      const stintLabel = st.laps >= 5 ? `${label} ${st.laps}L` : `${st.laps}`;
+      return `<div class="stint-seg ${compoundClass}" style="flex: ${st.laps};" title="${st.compound || 'unknown'} · laps ${st.lap_start}-${st.lap_end} (${st.laps} laps)">${stintLabel}</div>`;
     }).join('');
     return `<div class="stint-row">
       <div class="sr-driver">${d.code || '#' + d.num}<small>${d.driver}</small></div>

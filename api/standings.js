@@ -37,7 +37,13 @@ const teamId = constructor => (constructor?.constructorId || '').replace(/\s+/g,
 
 function parseQualifying(data) {
   const races = getRaces(data);
-  const race = races.length ? races[races.length - 1] : null;
+  const race = races
+    .filter(item => item?.QualifyingResults?.length)
+    .sort((a, b) => {
+      const dateDifference = Date.parse(a.date || '') - Date.parse(b.date || '');
+      return dateDifference || (parseInt(a.round, 10) || 0) - (parseInt(b.round, 10) || 0);
+    })
+    .pop() || null;
   const results = race?.QualifyingResults || [];
   if (!results.length) return null;
 
@@ -149,7 +155,7 @@ export default async function handler(req, res) {
       fetchJson('https://api.jolpi.ca/ergast/f1/current/constructorStandings.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/last/results.json'),
-      fetchJson('https://api.jolpi.ca/ergast/f1/current/qualifying.json'),
+      fetchJson('https://api.jolpi.ca/ergast/f1/current/qualifying.json?limit=2000'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/results/1.json?limit=100'),
       fetchJson('https://api.openf1.org/v1/sessions?session_key=latest', openF1Headers),
       fetchJson('https://api.openf1.org/v1/weather?session_key=latest', openF1Headers),
