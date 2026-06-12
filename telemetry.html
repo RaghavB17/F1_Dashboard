@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live Telemetry · The Pit Wall</title>
+<title>Live Timing · The Pit Wall</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -11,18 +11,16 @@
     --paper: #f2ece0;
     --racing: #e10600;
     --rule: rgba(242,236,224,0.1);
+    --muted: rgba(242,236,224,0.48);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    background: var(--carbon); color: var(--paper);
-    font-family: 'Inter', sans-serif;
-    height: 100vh; display: flex; flex-direction: column;
-    overflow: hidden;
+    min-height: 100vh; background: var(--carbon); color: var(--paper);
+    font-family: 'Inter', sans-serif; display: flex; flex-direction: column;
   }
   .header {
     padding: 14px 24px; border-bottom: 1px solid var(--rule);
-    display: flex; justify-content: space-between; align-items: center;
-    background: #0d0d0d;
+    display: flex; justify-content: space-between; align-items: center; background: #0d0d0d;
   }
   .header-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; }
   .header-title em { color: var(--racing); font-style: italic; }
@@ -31,58 +29,29 @@
     font-size: 11px; letter-spacing: 0.1em; border: 1px solid var(--rule); padding: 6px 12px;
   }
   .back-btn:hover { background: var(--paper); color: var(--carbon); }
-  
-  .layout { display: flex; flex: 1; overflow: hidden; }
-  
-  .map-container {
-    flex: 1.1; position: relative; border-right: 1px solid var(--rule);
-    display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(circle at center, #141414 0%, #0a0a0a 100%);
-    padding: 20px;
-  }
-  #trackSvg { width: 95%; height: 95%; transform: rotate(-90deg); }
-  
-  /* Smooth track outline */
-  .track-path { 
-    fill: none; 
-    stroke: rgba(242,236,224,0.25); 
-    stroke-width: 70; 
-    stroke-linecap: round; 
-    stroke-linejoin: round; 
-  }
-  
-  .car-dot { transition: cx 3s linear, cy 3s linear; }
-  .car-label { 
-    font-family: 'JetBrains Mono', monospace; 
-    font-size: 150px; 
-    fill: #fff; 
-    font-weight: bold; 
-    pointer-events: none; 
-    transition: x 3s linear, y 3s linear;
-    text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
-  }
-
-  .data-container { flex: 1.6; display: flex; flex-direction: column; background: #0d0d0d; }
+  .layout { flex: 1; width: 100%; max-width: 1500px; margin: 0 auto; border-inline: 1px solid var(--rule); background: #0d0d0d; }
   .data-header {
-    padding: 12px 16px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
-    letter-spacing: 0.2em; text-transform: uppercase; border-bottom: 1px solid var(--rule);
-    color: rgba(242,236,224,0.5);
-    background: #111;
+    padding: 14px 18px; display: flex; justify-content: space-between; gap: 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--rule); background: #111;
   }
-  .table-wrap { flex: 1; overflow-y: auto; }
-  table { width: 100%; border-collapse: collapse; text-align: left; }
-  th, td { padding: 10px 16px; border-bottom: 1px solid var(--rule); font-size: 12px; }
-  th { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(242,236,224,0.5); font-weight: normal; position: sticky; top: 0; background: #111; z-index: 10;}
-  .td-pos { font-family: 'JetBrains Mono', monospace; font-weight: bold; color: var(--paper); }
-  .td-driver { font-weight: 600; font-family: 'Inter', sans-serif; }
-  .td-time { font-family: 'JetBrains Mono', monospace; text-align: right; }
-  
-  /* Tyre Pills */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; min-width: 920px; border-collapse: collapse; text-align: left; }
+  th, td { padding: 13px 16px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+  th {
+    position: sticky; top: 0; z-index: 2; background: #111; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: normal; letter-spacing: 0.08em;
+  }
+  tbody tr:hover { background: rgba(242,236,224,0.035); }
+  .td-pos { width: 58px; font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; }
+  .td-driver { min-width: 210px; font-weight: 600; border-left: 4px solid var(--team-color, #fff); }
+  .driver-code { font-family: 'JetBrains Mono', monospace; }
+  .driver-name { margin-left: 8px; color: var(--muted); font-size: 10px; letter-spacing: 0.08em; }
+  .td-time { text-align: right; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .td-best { color: #d894ff; }
   .tyre-pill {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 50%;
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;
-    color: #000;
+    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+    border-radius: 50%; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #000;
   }
   .tyre-soft { background: #ff4d4d; color: #fff; }
   .tyre-medium { background: #ffd700; }
@@ -90,322 +59,163 @@
   .tyre-intermediate { background: #00cc66; color: #fff; }
   .tyre-wet { background: #3385ff; color: #fff; }
   .tyre-unknown { background: #444; color: #aaa; }
-
+  .empty { padding: 72px 20px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
   .status-bar {
-    padding: 6px 16px; background: var(--racing); color: #fff;
+    padding: 7px 16px; background: var(--racing); color: #fff; display: flex; justify-content: space-between; gap: 16px;
     font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
-    display: flex; justify-content: space-between; transition: background 0.3s;
+  }
+  @media (max-width: 700px) {
+    .header { padding: 12px; }
+    .driver-name { display: none; }
+    .data-header, .status-bar { flex-direction: column; gap: 4px; }
   }
 </style>
 </head>
 <body>
-
 <header class="header">
-  <div class="header-title">Live <em>Telemetry</em></div>
-  <a href="/index.html" class="back-btn">← RETURN TO PIT WALL</a>
+  <div class="header-title">Live <em>Timing</em></div>
+  <a href="/index.html" class="back-btn">RETURN TO PIT WALL</a>
 </header>
 
-<div class="layout">
-  <div class="map-container">
-    <svg id="trackSvg" viewBox="0 0 10000 10000">
-      <path id="trackPath" class="track-path" d=""></path>
-      <g id="carsLayer"></g>
-    </svg>
+<main class="layout">
+  <div class="data-header">
+    <span>Session Timing Tower</span>
+    <span id="sessionInfo">Awaiting session data</span>
   </div>
-  
-  <div class="data-container">
-    <div class="data-header">Live Timing Tower</div>
-    <div class="table-wrap">
-      <table id="timingTable">
-        <thead>
-          <tr>
-            <th>Pos</th>
-            <th>Driver</th>
-            <th>Tyre</th>
-            <th style="text-align:right;">Last Lap</th>
-            <th style="text-align:right;">Gap</th>
-            <th style="text-align:right;">Interval</th>
-          </tr>
-        </thead>
-        <tbody id="timingBody">
-          <tr><td colspan="6" style="text-align:center; opacity:0.5; padding-top:24px;">Awaiting telemetry state...</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Pos</th>
+          <th>Driver</th>
+          <th>Tyre</th>
+          <th style="text-align:right;">Lap</th>
+          <th style="text-align:right;">Last Lap</th>
+          <th style="text-align:right;">Best Lap</th>
+          <th style="text-align:right;">Gap</th>
+          <th style="text-align:right;">Interval</th>
+        </tr>
+      </thead>
+      <tbody id="timingBody">
+        <tr><td colspan="8" class="empty">Establishing timing feed...</td></tr>
+      </tbody>
+    </table>
   </div>
-</div>
+</main>
 
 <div class="status-bar" id="statusBar">
-  <span id="connStatus">CONNECTING TO PROXY...</span>
-  <span id="sessionInfo">AWAITING DATA</span>
+  <span id="connStatus">CONNECTING TO OPENF1...</span>
+  <span id="refreshStatus">WAITING</span>
 </div>
 
 <script>
 const API_PROXY = '/api/telemetry';
+const POLL_MS = 6000;
+const driverDictionary = {};
+let sessionIsLive = false;
+let pollTimer = null;
 
-let minX = Infinity, maxX = -Infinity;
-let minY = Infinity, maxY = -Infinity;
-let trackScale = 1, offsetX = 0, offsetY = 0;
-let isPolling = false;
+function latestWindow() {
+  return new Date(Date.now() - 3 * 60 * 1000).toISOString();
+}
 
-// Driver dictionary populated on load
-let driverDictionary = {};
+function formatLapTime(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return '—';
+  const mins = Math.floor(value / 60);
+  const secs = (value % 60).toFixed(3);
+  return mins ? `${mins}:${secs.padStart(6, '0')}` : secs;
+}
 
-function scaleX(x) { return offsetX + ((x - minX) * trackScale); }
-function scaleY(y) { return offsetY + ((y - minY) * trackScale); }
+function formatDelta(value, leaderLabel) {
+  if (value == null || value === '') return leaderLabel;
+  if (typeof value === 'number') return value === 0 ? leaderLabel : `+${value.toFixed(3)}`;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric === 0 ? leaderLabel : `+${numeric.toFixed(3)}`;
+  return String(value).toUpperCase();
+}
+
+function renderRows(rows) {
+  const body = document.getElementById('timingBody');
+  if (!Array.isArray(rows) || !rows.length) {
+    body.innerHTML = '<tr><td colspan="8" class="empty">Timing data is not available for this session yet.</td></tr>';
+    return;
+  }
+
+  rows.sort((a, b) => (a.position || 999) - (b.position || 999));
+  body.innerHTML = rows.map(row => {
+    const meta = driverDictionary[row.driver_number] || {};
+    const compound = String(row.compound || 'unknown').toLowerCase();
+    const tyreClass = ['soft', 'medium', 'hard', 'intermediate', 'wet'].includes(compound) ? compound : 'unknown';
+    const tyreLabel = tyreClass === 'unknown' ? '?' : tyreClass.charAt(0).toUpperCase();
+    return `<tr>
+      <td class="td-pos">${row.position || '—'}</td>
+      <td class="td-driver" style="--team-color:${meta.color || '#fff'}">
+        <span class="driver-code">${meta.acronym || '#' + row.driver_number}</span>
+        <span class="driver-name">${meta.name || ''}</span>
+      </td>
+      <td><span class="tyre-pill tyre-${tyreClass}" title="${compound}">${tyreLabel}</span></td>
+      <td class="td-time">${row.lap_number || '—'}</td>
+      <td class="td-time">${formatLapTime(row.last_lap)}</td>
+      <td class="td-time td-best">${formatLapTime(row.best_lap)}</td>
+      <td class="td-time">${formatDelta(row.gap_to_leader, 'LEADER')}</td>
+      <td class="td-time">${formatDelta(row.interval, '—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function pollTiming() {
+  const refresh = document.getElementById('refreshStatus');
+  try {
+    const query = new URLSearchParams({ endpoint: 'timing', session_key: 'latest' });
+    if (sessionIsLive) query.set('date>=', latestWindow());
+    const response = await fetch(`${API_PROXY}?${query}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderRows(await response.json());
+    refresh.textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
+  } catch (error) {
+    refresh.textContent = 'REFRESH FAILED';
+    console.warn('Timing refresh failed:', error);
+  }
+}
 
 async function initTelemetry() {
-  const statusEl = document.getElementById('connStatus');
+  const status = document.getElementById('connStatus');
   const statusBar = document.getElementById('statusBar');
-  statusEl.textContent = 'FETCHING SESSION STATE...';
-  
   try {
-    // 1. Fetch Session Info
-    const sessionRes = await fetch(`${API_PROXY}?endpoint=sessions&session_key=latest`);
-    const sessionData = await sessionRes.json();
-    
-    let isLive = true;
-    if (sessionData && sessionData.length > 0) {
-      const session = sessionData[0];
-      const endTime = new Date(session.date_end);
-      if (Date.now() > endTime.getTime()) isLive = false;
-      document.getElementById('sessionInfo').textContent = `${session.session_name.toUpperCase()} · ${session.country_name.toUpperCase()}`;
+    const [sessionResponse, driversResponse] = await Promise.all([
+      fetch(`${API_PROXY}?endpoint=sessions&session_key=latest`),
+      fetch(`${API_PROXY}?endpoint=drivers&session_key=latest`)
+    ]);
+    if (!sessionResponse.ok || !driversResponse.ok) throw new Error('Session setup failed');
+
+    const sessions = await sessionResponse.json();
+    const drivers = await driversResponse.json();
+    const session = Array.isArray(sessions) ? sessions[0] : null;
+
+    for (const driver of Array.isArray(drivers) ? drivers : []) {
+      if (driver?.driver_number == null) continue;
+      driverDictionary[driver.driver_number] = {
+        acronym: driver.name_acronym || String(driver.last_name || '').slice(0, 3).toUpperCase(),
+        name: driver.full_name || driver.last_name || '',
+        color: `#${driver.team_colour || 'ffffff'}`
+      };
     }
 
-    statusEl.textContent = 'BUILDING DRIVER ROSTER...';
-
-    // 2. Fetch Driver Directory
-    const driversRes = await fetch(`${API_PROXY}?endpoint=drivers&session_key=latest`);
-    const driversList = await driversRes.json();
-    
-    if (Array.isArray(driversList)) {
-      driversList.forEach(d => {
-        driverDictionary[d.driver_number] = {
-          acronym: d.name_acronym || d.last_name.substring(0,3).toUpperCase(),
-          name: d.last_name,
-          color: '#' + (d.team_colour || 'ffffff')
-        };
-      });
+    if (session) {
+      document.getElementById('sessionInfo').textContent = `${session.session_name} · ${session.country_name}`;
+      sessionIsLive = Date.now() >= Date.parse(session.date_start) && Date.now() <= Date.parse(session.date_end);
     }
 
-    statusEl.textContent = 'GENERATING CIRCUIT MAP...';
-    
-    // 3. Trace Track Map (using ONLY ONE driver to prevent zigzagging)
-    const traceDriver = driversList.length > 0 ? driversList[0].driver_number : 1;
-    const locRes = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&driver_number=${traceDriver}`);
-    const locData = await locRes.json();
-    
-    if (!locData || locData.length === 0 || locData.error) {
-      throw new Error('No track telemetry data available.');
-    }
-
-    // Sort by date to ensure the path is drawn in chronological order
-    locData.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Calculate Bounding Box
-    const samplePoints = locData.slice(0, 2000); // 2000 points covers a full lap
-    samplePoints.forEach(pt => {
-      if (pt.x < minX) minX = pt.x;
-      if (pt.x > maxX) maxX = pt.x;
-      if (pt.y < minY) minY = pt.y;
-      if (pt.y > maxY) maxY = pt.y;
-    });
-
-    const trackWidth = maxX - minX || 1;
-    const trackHeight = maxY - minY || 1;
-    const canvasSize = 8500; 
-    const padding = 750;
-    
-    trackScale = Math.min(canvasSize / trackWidth, canvasSize / trackHeight);
-    offsetX = padding + (canvasSize - (trackWidth * trackScale)) / 2;
-    offsetY = padding + (canvasSize - (trackHeight * trackScale)) / 2;
-
-    const pathEl = document.getElementById('trackPath');
-    let d = `M ${scaleX(samplePoints[0].x)} ${scaleY(samplePoints[0].y)} `;
-    for(let i = 1; i < samplePoints.length; i += 3) { 
-        d += `L ${scaleX(samplePoints[i].x)} ${scaleY(samplePoints[i].y)} `;
-    }
-    // Don't close the path with Z unless it's a perfect loop, otherwise it draws a harsh straight line through the map
-    pathEl.setAttribute('d', d);
-
-    if (!isLive) {
-       statusEl.textContent = 'OFFLINE · SESSION COMPLETED';
-       statusBar.style.background = '#222';
-       renderOfflineTable();
-       return;
-    }
-
-    statusEl.textContent = 'CONNECTED · LIVE TELEMETRY STREAM ACTIVE';
-    statusBar.style.background = 'var(--racing)';
-    
-    isPolling = true;
-    pollCarPositions();
-    pollTimingData();
-    
-    // Continuous loops
-    setInterval(pollCarPositions, 3000); 
-    setInterval(pollTimingData, 6000);  
-
+    await pollTiming();
+    status.textContent = sessionIsLive ? 'CONNECTED · LIVE TIMING ACTIVE' : 'LATEST SESSION · FINAL TIMING';
+    statusBar.style.background = sessionIsLive ? 'var(--racing)' : '#292929';
+    if (sessionIsLive) pollTimer = setInterval(pollTiming, POLL_MS);
   } catch (error) {
-    statusEl.textContent = 'ERROR INITIATING TELEMETRY FEED';
+    status.textContent = 'TIMING FEED UNAVAILABLE';
     statusBar.style.background = '#444';
     console.error(error);
   }
-}
-
-async function pollCarPositions() {
-  if (!isPolling) return;
-  try {
-    const timeString = new Date(Date.now() - 10000).toISOString();
-    const res = await fetch(`${API_PROXY}?endpoint=location&session_key=latest&date>${timeString}`);
-    const data = await res.json();
-    
-    if (!Array.isArray(data)) return;
-
-    const latestPos = {};
-    data.forEach(pt => { latestPos[pt.driver_number] = pt; });
-
-    const layer = document.getElementById('carsLayer');
-    
-    Object.values(latestPos).forEach(pt => {
-      const sx = scaleX(pt.x);
-      const sy = scaleY(pt.y);
-      const driverMeta = driverDictionary[pt.driver_number] || {};
-      const color = driverMeta.color || '#ffffff';
-      const labelText = driverMeta.acronym || pt.driver_number;
-
-      let circle = document.getElementById(`car-${pt.driver_number}`);
-      let label = document.getElementById(`label-${pt.driver_number}`);
-
-      if (!circle) {
-        circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.id = `car-${pt.driver_number}`;
-        circle.setAttribute('r', '75'); 
-        circle.setAttribute('fill', color);
-        circle.setAttribute('stroke', '#000');
-        circle.setAttribute('stroke-width', '25');
-        circle.classList.add('car-dot');
-        layer.appendChild(circle);
-
-        label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        label.id = `label-${pt.driver_number}`;
-        label.textContent = labelText;
-        label.classList.add('car-label');
-        layer.appendChild(label);
-      }
-
-      circle.setAttribute('cx', sx);
-      circle.setAttribute('cy', sy);
-      label.setAttribute('x', sx + 120); 
-      label.setAttribute('y', sy + 60);
-    });
-  } catch (e) {
-    console.warn("Location packet refresh skipped", e);
-  }
-}
-
-async function pollTimingData() {
-  if (!isPolling) return;
-  try {
-    const [posRes, intRes, lapsRes, stintsRes] = await Promise.all([
-      fetch(`${API_PROXY}?endpoint=position&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=intervals&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=laps&session_key=latest`),
-      fetch(`${API_PROXY}?endpoint=stints&session_key=latest`)
-    ]);
-
-    const posData = await posRes.json();
-    const intData = await intRes.json();
-    const lapsData = await lapsRes.json();
-    const stintsData = await stintsRes.json();
-
-    if(!Array.isArray(posData)) return;
-
-    const driverStats = {};
-    
-    // 1. Map Positions
-    posData.forEach(p => { 
-      if(!driverStats[p.driver_number]) driverStats[p.driver_number] = {};
-      driverStats[p.driver_number].pos = p.position; 
-    });
-    
-    // 2. Map Intervals & Gaps
-    if (Array.isArray(intData)) {
-      intData.forEach(i => { 
-        if(driverStats[i.driver_number]) {
-          driverStats[i.driver_number].interval = i.interval; 
-          driverStats[i.driver_number].gap = i.gap_to_leader;
-        }
-      });
-    }
-
-    // 3. Map Lap Times
-    if (Array.isArray(lapsData)) {
-      lapsData.forEach(l => { 
-        if(driverStats[l.driver_number] && l.lap_duration) {
-          driverStats[l.driver_number].lap_time = l.lap_duration; 
-        }
-      });
-    }
-
-    // 4. Map Tyre Stints
-    if (Array.isArray(stintsData)) {
-      // Sort so highest stint number is processed first (active stint)
-      stintsData.sort((a,b) => b.stint_number - a.stint_number);
-      stintsData.forEach(s => {
-        if(driverStats[s.driver_number] && !driverStats[s.driver_number].tyre) {
-          driverStats[s.driver_number].tyre = s.compound ? s.compound.toLowerCase() : 'unknown';
-        }
-      });
-    }
-
-    // Compile & Sort
-    const sortedDrivers = Object.keys(driverStats)
-      .map(num => ({ num, ...driverStats[num] }))
-      .sort((a, b) => (a.pos || 99) - (b.pos || 99));
-
-    if(sortedDrivers.length === 0) return;
-
-    const tbody = document.getElementById('timingBody');
-    tbody.innerHTML = sortedDrivers.map(d => {
-      const meta = driverDictionary[d.num] || {};
-      const dName = meta.name ? `${meta.acronym} <span style="opacity:0.4; font-size:10px; margin-left:6px;">${meta.name.toUpperCase()}</span>` : `#${d.num}`;
-      
-      const tyreCompound = d.tyre || 'unknown';
-      const tyreLabel = tyreCompound !== 'unknown' ? tyreCompound.charAt(0).toUpperCase() : '?';
-
-      return `
-      <tr>
-        <td class="td-pos">${d.pos || '-'}</td>
-        <td class="td-driver" style="border-left: 3px solid ${meta.color || '#fff'}; padding-left:12px;">${dName}</td>
-        <td><span class="tyre-pill tyre-${tyreCompound}">${tyreLabel}</span></td>
-        <td class="td-time">${d.lap_time ? formatLapTime(d.lap_time) : 'In Pits'}</td>
-        <td class="td-time">${d.gap !== undefined && d.gap !== null ? '+' + d.gap.toFixed(3) : 'LEADER'}</td>
-        <td class="td-time">${d.interval !== undefined && d.interval !== null ? '+' + d.interval.toFixed(3) : '-'}</td>
-      </tr>
-      `;
-    }).join('');
-
-  } catch (e) {
-    console.warn("Timing metrics ingestion dropped", e);
-  }
-}
-
-function formatLapTime(timeInSeconds) {
-  if(!timeInSeconds) return 'In Pits';
-  const mins = Math.floor(timeInSeconds / 60);
-  const secs = (timeInSeconds % 60).toFixed(3);
-  return mins > 0 ? `${mins}:${secs.padStart(6, '0')}` : secs;
-}
-
-function renderOfflineTable() {
-  document.getElementById('timingBody').innerHTML = `
-    <tr>
-      <td colspan="6" style="text-align:center; padding: 60px 20px; color:rgba(242,236,224,0.4); font-family:'JetBrains Mono', monospace;">
-        <div style="font-size:18px; color:#fff; margin-bottom:12px;">SESSION COMPLETED</div>
-        Live streaming feeds are available during active track operations.
-      </td>
-    </tr>`;
 }
 
 initTelemetry();
