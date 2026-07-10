@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Pit Wall · Live F1 2026 Dashboard</title>
+<title>The Pit Wall · F1 2026 Dashboard</title>
 
-<meta name="description" content="A live, auto-updating F1 2026 dashboard. Countdown to the next Grand Prix, driver and constructor standings, the full calendar, last race podium and paddock intel." />
+<meta name="description" content="An F1 2026 dashboard with countdowns, driver and constructor standings, the full calendar, last race podium, paddock intel, and historical race analytics." />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 <meta name="theme-color" content="#0a0a0a" />
 
@@ -1037,109 +1037,6 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   opacity: 0.85;
 }
 .con-row:hover .con-heritage { color: var(--ink-2); }
-
-/* live grid · OpenF1-fed positions during a live session */
-.livegrid-section {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 24px 36px 0;
-}
-.livegrid-card {
-  background: var(--carbon);
-  color: var(--paper);
-  border-top: 4px solid var(--racing);
-  padding: 22px 26px 20px;
-  position: relative;
-}
-.livegrid-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 16px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
-}
-.livegrid-head .lg-eyebrow { display: inline-flex; align-items: center; gap: 10px; color: var(--paper); font-weight: 700; }
-.livegrid-head .lg-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--racing); animation: liveBannerPulse 1.4s ease-in-out infinite; }
-.livegrid-head .lg-meta { color: rgba(242,236,224,0.45); }
-.livegrid-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 6px;
-}
-.livegrid-rc {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(242,236,224,0.12);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; letter-spacing: .14em;
-  color: rgba(242,236,224,0.7);
-  text-transform: uppercase;
-}
-.livegrid-rc .rc-line { padding: 4px 0; }
-.livegrid-rc .rc-line strong { color: var(--paper); }
-@media (max-width: 600px) {
-  .livegrid-section { padding: 20px 16px 0; }
-  .livegrid-card { padding: 18px 18px 16px; }
-}
-
-/* live banner · only visible when a race is currently active */
-.live-banner {
-  position: sticky; top: 0; z-index: 60;
-  display: none;
-  background: var(--racing); color: var(--paper);
-  padding: 9px 16px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; letter-spacing: .24em; text-transform: uppercase;
-  font-weight: 700;
-  text-align: center;
-}
-.live-banner.show { display: block; animation: liveBannerIn .6s ease both; }
-.live-banner .lb-dot {
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--paper); margin-right: 9px; vertical-align: 1px;
-  animation: liveBannerPulse 1.4s ease-in-out infinite;
-}
-.live-banner em { font-style: italic; color: var(--gold); font-weight: 700; }
-@keyframes liveBannerIn {
-  0%   { opacity: 0; transform: translateY(-8px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes liveBannerPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.45; transform: scale(0.75); }
-}
-
-.live-timing-table {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 16px;
-}
-.lt-row {
-  display: grid;
-  grid-template-columns: 32px 4px 3fr 2fr 2fr;
-  gap: 12px;
-  padding: 10px 14px;
-  background: rgba(242,236,224,0.06);
-  border-left: 3px solid var(--lt-color, #888);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  align-items: center;
-}
-.lt-header {
-  background: transparent;
-  border: none;
-  border-left: 3px solid transparent;
-  color: rgba(242,236,224,0.5);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(242,236,224,0.1);
-}
-.lt-pos { font-weight: 700; color: var(--paper); }
-.lt-driver { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--paper); }
-.lt-gap { color: #f2ece0; text-align: right; }
-.lt-interval { color: var(--accent); text-align: right; font-weight: 700; }
 
 /* mobile guards · belt and suspenders across every section */
 @media (max-width: 600px) {
@@ -2390,7 +2287,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
     <span class="ts-pulse"></span>
     <span><strong>the pit wall</strong></span>
     <span class="ts-sep">/</span>
-    <span class="ts-meta">f1 2026 &middot; live edition</span>
+    <span class="ts-meta">f1 2026 &middot; race edition</span>
   </div>
 
   <div class="onb-stage" id="onbStep1">
@@ -2446,22 +2343,6 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   <div>Tap <span class="pi-share">⬆︎</span> then <strong>Add to Home Screen</strong>. The Pit Wall opens like an app, no browser bar.</div>
 </div>
 
-<div class="live-banner" id="liveBanner" role="status">
-  <span class="lb-dot"></span><span id="liveBannerText">live now</span>
-</div>
-
-<section class="livegrid-section live-timing-section" id="livegridSection" style="display:none;">
-  <div class="livegrid-card">
-    <div class="livegrid-head">
-      <span class="lg-eyebrow"><span class="lg-dot"></span><span id="livegridLabel">Live Timing & Telemetry</span></span>
-      <span class="lg-meta" id="livegridMeta">Intervals update every 30s</span>
-    </div>
-    <div class="live-timing-table" id="liveTimingBody">
-      </div>
-    <div class="livegrid-rc" id="livegridRc"></div>
-  </div>
-</section>
-
 <div class="ticker-wrap">
   <div class="ticker-track" id="tkTrack"></div>
 </div>
@@ -2474,7 +2355,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   <div class="hero-top">
     <div class="brand-eyebrow">
       <span class="checker-flag"></span>
-      <span>Live Edition · F1 2026</span>
+      <span>Race Edition · F1 2026</span>
     </div>
     <div class="brand-right">
       <div class="greeting" id="greeting">Good morning</div>
@@ -2491,7 +2372,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
   </div>
 
   <div class="hero-sub">
-    <span class="live-badge">Live Edition</span>
+    <span class="live-badge">Race Edition</span>
     <span>Drivers · Constructors · Paddock · Calendar</span>
   </div>
 </section>
@@ -2542,8 +2423,8 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
     <div class="ontrack-head">
       <span class="ot-title">On <em>Track</em></span>
       <a href="/telemetry.html" style="background:var(--racing); color:#fff; padding:8px 16px; font-size:11px; font-family:'JetBrains Mono', monospace; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; text-decoration:none; box-shadow: 0 4px 12px rgba(225,6,0,0.25); border-radius:2px; margin-left:14px; transition: transform 0.2s ease; display:inline-block;">
-        Launch Live Telemetry ↗
-      </a><span class="ot-live"><span class="ot-dot"></span><span id="ontrackStatus">session live</span></span>
+        Open Race Analytics ↗
+      </a><span class="ot-live"><span class="ot-dot"></span><span id="ontrackStatus">analytics ready</span></span>
     </div>
     <div class="ontrack-stage">
       <svg class="ontrack-svg" id="ontrackSvg" viewBox="0 0 1400 110" preserveAspectRatio="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -2701,7 +2582,7 @@ section, .hero, .race-hero, .cal-section, .main-section, .race-extra-section,
 
 <script>
 /* ================================================================
-   THE PIT WALL · live edition
+   THE PIT WALL · race edition
    ================================================================ */
 
 const API_URL = (function () {
@@ -2868,7 +2749,7 @@ function paintHeader(cfg) {
   $('dateline').textContent = `${D[now.getDay()]} · ${pad(now.getDate())} ${M[now.getMonth()]} · ${now.getFullYear()}`;
   $('heroLine1').textContent = name ? `${name}'s` : 'Your';
   $('fNote').innerHTML = `${name ? `By Raghav Bucha &middot; ` : ''}Lights out and away we go <span style="opacity:0.3; margin:0 8px;">|</span> <a href="mailto:work.raghavbuchaa@gmail.com" style="color:var(--accent); text-decoration:none; font-family:'Inter', sans-serif; font-weight:600; pointer-events:auto;">Reach out to Raghav</a>`;
-  document.title = `${name ? `${name}'s ` : ''}Pit Wall · Live F1 2026 Dashboard`;
+  document.title = `${name ? `${name}'s ` : ''}Pit Wall · F1 2026 Dashboard`;
 }
 
 let countdownTimer = null;
@@ -3117,8 +2998,7 @@ function renderOnTrack(data, cfg) {
   if (t1) t1.setAttribute('x', String(Math.round(700 + (Math.random() * 0))));
 
   const favCode = cfg && cfg.driverCode;
-  const isLive = data.next_race && data.next_race.status === 'live';
-  status.textContent = isLive ? 'session live' : 'paddock laps';
+  status.textContent = 'paddock laps';
 
   carsG.innerHTML = drivers.map((d, i) => {
     const col = teamColor(d.team_id);
@@ -3449,8 +3329,8 @@ async function fetchAndRender(cfg) {
     const r = await fetch('/api/standings', { headers: { 'accept': 'application/json' } });
     if (!r.ok) throw new Error('http ' + r.status);
     const data = await r.json();
-    window.__latestData = data;
-    renderAll(data, cfg);
+  window.__latestData = data;
+  renderAll(data, cfg);
     paintLiveIndicator(data, false);
   } catch (e) {
     console.warn('fetch failed', e);
@@ -3463,7 +3343,6 @@ async function fetchAndRender(cfg) {
 function renderAll(data, cfg) {
   applyTheme(cfg, data);
   paintHeader(cfg);
-  renderLiveBanner(data);
   renderTicker(data, cfg);
   renderRaceHero(data);
   renderOnTrack(data, cfg);
@@ -3481,68 +3360,6 @@ function renderAll(data, cfg) {
   hideSplash();
   if (window.__firstRender) {
     setTimeout(() => { window.__firstRender = false; }, 3500);
-  }
-}
-
-let liveTimer = null;
-async function fetchLive() {
-  try {
-    const r = await fetch('/api/live');
-    if (!r.ok) return;
-    const data = await r.json();
-    const sec = $('livegridSection');
-    if (!sec) return;
-    if (data.live) {
-      sec.style.display = 'block';
-      const lbl = $('livegridLabel');
-      const meta = $('livegridMeta');
-      if (lbl) lbl.textContent = `${data.session.type} · ${data.session.country}`;
-      if (meta) meta.textContent = `${data.session.circuit || ''} · refreshing every 30s`;
-      const body = $('liveTimingBody');
-      if (body && Array.isArray(data.grid)) {
-        let html = `
-          <div class="lt-row lt-header">
-            <div>POS</div><div></div><div>DRIVER</div><div style="text-align:right">GAP TO LEADER</div><div style="text-align:right">INTERVAL</div>
-          </div>
-        `;
-        html += data.grid.map(g => `
-          <div class="lt-row" style="--lt-color:${g.team_color || '#888'};">
-            <div class="lt-pos">${g.pos}</div>
-            <div class="lt-stripe"></div>
-            <div class="lt-driver">${g.short_name || g.code}</div>
-            <div class="lt-gap">${g.gap_to_leader || 'LEADER'}</div>
-            <div class="lt-interval">${g.interval || '-'}</div>
-          </div>
-        `).join('');
-        body.innerHTML = html;
-      }
-      const rc = $('livegridRc');
-      if (rc && Array.isArray(data.race_control) && data.race_control.length) {
-        rc.innerHTML = data.race_control.slice(0, 4).map(m =>
-          `<div class="rc-line"><strong>${m.flag || m.category || 'rc'}</strong> · ${escapeHtml(m.message || '').slice(0, 200)}</div>`
-        ).join('');
-      } else if (rc) rc.innerHTML = '';
-    } else {
-      sec.style.display = 'none';
-    }
-  } catch {}
-}
-function startLivePoll() {
-  if (liveTimer) clearInterval(liveTimer);
-  fetchLive();
-  liveTimer = setInterval(fetchLive, 30 * 1000);
-}
-
-function renderLiveBanner(data) {
-  const el = $('liveBanner');
-  const text = $('liveBannerText');
-  if (!el) return;
-  const r = data && data.next_race;
-  if (r && r.status === 'live') {
-    text.innerHTML = `live now &middot; <em>${r.short_name || r.name}</em> &middot; ${r.country || ''} &middot; lights are out`;
-    el.classList.add('show');
-  } else {
-    el.classList.remove('show');
   }
 }
 
@@ -4145,8 +3962,6 @@ function applyConfig(cfg) {
   }
 
   setupPWA();
-  startLivePoll();
-
   setTimeout(() => hideSplash(), 4000);
 })();
 </script>

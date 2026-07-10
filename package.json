@@ -1,7 +1,7 @@
 {
   "name": "f1-dashboard",
   "version": "1.0.0",
-  "description": "Live F1 2026 Dashboard - The Pit Wall",
+  "description": "F1 2026 Dashboard and Race Analytics - The Pit Wall",
   "main": "index.js",
   "scripts": {
     "postinstall": "mkdir -p assets/js && cp node_modules/@vercel/analytics/dist/index.mjs assets/js/vercel-analytics.mjs",

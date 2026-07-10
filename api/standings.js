@@ -1,25 +1,3 @@
-let cachedToken = null;
-let tokenExpiry = 0;
-
-async function getOpenF1Token() {
-  if (cachedToken && Date.now() < tokenExpiry - 60000) return cachedToken;
-  const username = process.env.OPENF1_USERNAME;
-  const password = process.env.OPENF1_PASSWORD;
-  if (!username || !password) return null;
-
-  const response = await fetch('https://api.openf1.org/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ username, password })
-  });
-  if (!response.ok) return null;
-
-  const data = await response.json();
-  cachedToken = data.access_token;
-  tokenExpiry = Date.now() + ((parseInt(data.expires_in, 10) || 3600) * 1000);
-  return cachedToken;
-}
-
 async function fetchJson(url, headers = {}) {
   try {
     const response = await fetch(url, { headers });
@@ -136,9 +114,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=120');
 
   try {
-    const token = await getOpenF1Token();
     const openF1Headers = { accept: 'application/json' };
-    if (token) openF1Headers.Authorization = `Bearer ${token}`;
 
     const [
       driversData, constructorsData, scheduleData, lastRaceData, winnersData,
