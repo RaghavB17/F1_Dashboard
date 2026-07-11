@@ -175,16 +175,16 @@ export default async function handler(req, res) {
       };
     });
 
-    const latestOpenF1Session = Array.isArray(sessionData) ? sessionData[0] : null;
-    const latestSessionKey = latestOpenF1Session?.session_key;
-    const openF1SessionQuery = latestSessionKey != null
-      ? `session_key=${encodeURIComponent(latestSessionKey)}`
-      : 'session_key=latest';
+    // const latestOpenF1Session = Array.isArray(sessionData) ? sessionData[0] : null;
+    // const latestSessionKey = latestOpenF1Session?.session_key;
+    // const openF1SessionQuery = latestSessionKey != null
+    //   ? `session_key=${encodeURIComponent(latestSessionKey)}`
+    //   : 'session_key=latest';
     const [weatherData, stintData, openF1Drivers, positionData] = await Promise.all([
-      fetchJson(`https://api.openf1.org/v1/weather?${openF1SessionQuery}`, openF1Headers),
-      fetchJson(`https://api.openf1.org/v1/stints?${openF1SessionQuery}`, openF1Headers),
-      fetchJson(`https://api.openf1.org/v1/drivers?${openF1SessionQuery}`, openF1Headers),
-      fetchJson(`https://api.openf1.org/v1/position?${openF1SessionQuery}`, openF1Headers)
+      fetchJson(`https://api.openf1.org/v1/weather?session_key=latest`, openF1Headers),
+      fetchJson(`https://api.openf1.org/v1/stints?session_key=latest`, openF1Headers),
+      fetchJson(`https://api.openf1.org/v1/drivers?session_key=latest`, openF1Headers),
+      fetchJson(`https://api.openf1.org/v1/position?session_key=latest`, openF1Headers)
     ]);
 
     const constructorList = getStandingsList(constructorsData).ConstructorStandings || [];
