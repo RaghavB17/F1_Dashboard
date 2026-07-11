@@ -213,15 +213,64 @@ def sample_rows(frame, limit=90):
     return frame.iloc[::step].head(limit)
 
 
-def build_telemetry_traces(laps):
+def fastest_lap_number(laps, driver):
+    try:
+        driver_laps = laps[laps["Driver"] == driver].dropna(subset=["LapTime"])
+        if driver_laps.empty:
+            return None
+        fastest = driver_laps.pick_fastest()
+        return int(clean(fastest.get("LapNumber")) or 0)
+    except Exception:
+        return None
+
+
+def build_lap_options(laps):
+    options = {}
+    if laps.empty or "Driver" not in laps.columns:
+        return options
+    for driver in sorted(laps["Driver"].dropna().unique()):
+        driver_laps = laps[laps["Driver"] == driver].dropna(subset=["LapNumber"])
+        lap_numbers = sorted({int(clean(lap) or 0) for lap in driver_laps["LapNumber"] if clean(lap)})
+        options[clean(driver)] = {
+            "laps": lap_numbers,
+            "fastest_lap": fastest_lap_number(laps, driver),
+        }
+    return options
+
+
+def selected_trace_specs(laps, query):
+    available = [clean(item) for item in laps["Driver"].dropna().unique()]
+    available = [item for item in available if item]
+    defaults = available[:2]
+    specs = []
+    for index, suffix in enumerate(("a", "b")):
+        driver = clean(query.get(f"driver_{suffix}", [defaults[index] if index < len(defaults) else None])[0])
+        if not driver or driver not in available:
+            continue
+        requested_lap = clean(query.get(f"lap_{suffix}", [""])[0])
+        lap_number = int(requested_lap) if str(requested_lap).isdigit() else fastest_lap_number(laps, driver)
+        specs.append({"driver": driver, "lap_number": lap_number})
+    return specs
+
+
+def pick_driver_lap(laps, driver, lap_number):
+    driver_laps = laps[laps["Driver"] == driver]
+    if lap_number:
+        exact = driver_laps[driver_laps["LapNumber"] == lap_number]
+        if not exact.empty:
+            return exact.iloc[0]
+    return driver_laps.dropna(subset=["LapTime"]).pick_fastest()
+
+
+def build_telemetry_traces(laps, specs):
     traces = []
     if laps.empty:
         return traces
-    driver_codes = list(laps.dropna(subset=["LapTime"]).sort_values("LapTime")["Driver"].dropna().unique())[:2]
-    for code in driver_codes:
+    for spec in specs:
+        code = spec.get("driver")
         try:
-            fastest = laps[laps["Driver"] == code].pick_fastest()
-            car_data = fastest.get_car_data().add_distance()
+            lap = pick_driver_lap(laps, code, spec.get("lap_number"))
+            car_data = lap.get_car_data().add_distance()
             points = []
             for _, row in sample_rows(car_data).iterrows():
                 points.append({
@@ -235,8 +284,8 @@ def build_telemetry_traces(laps):
             if points:
                 traces.append({
                     "driver": code,
-                    "lap_number": int(clean(fastest.get("LapNumber")) or 0),
-                    "lap_time": format_duration(fastest.get("LapTime")),
+                    "lap_number": int(clean(lap.get("LapNumber")) or 0),
+                    "lap_time": format_duration(lap.get("LapTime")),
                     "points": points,
                 })
         except Exception:
@@ -244,28 +293,35 @@ def build_telemetry_traces(laps):
     return traces
 
 
-def build_track_map(laps):
+def build_track_maps(laps, specs):
     if laps.empty:
-        return {"points": [], "drivers": []}
-    try:
-        fastest = laps.dropna(subset=["LapTime"]).pick_fastest()
-        pos_data = fastest.get_pos_data()
-        points = []
-        for _, row in sample_rows(pos_data, 120).iterrows():
-            x = clean(row.get("X"))
-            y = clean(row.get("Y"))
-            if x is None or y is None:
-                continue
-            points.append({"x": round(float(x), 2), "y": round(float(y), 2)})
-        return {
-            "points": points,
-            "drivers": [{
-                "driver": clean(fastest.get("Driver")),
-                "lap_number": int(clean(fastest.get("LapNumber")) or 0),
-            }] if points else [],
-        }
-    except Exception:
-        return {"points": [], "drivers": []}
+        return {"points": [], "drivers": [], "maps": []}
+    maps = []
+    for spec in specs[:2]:
+        try:
+            lap = pick_driver_lap(laps, spec.get("driver"), spec.get("lap_number"))
+            pos_data = lap.get_pos_data()
+            points = []
+            for _, row in sample_rows(pos_data, 140).iterrows():
+                x = clean(row.get("X"))
+                y = clean(row.get("Y"))
+                if x is None or y is None:
+                    continue
+                points.append({"x": round(float(x), 2), "y": round(float(y), 2)})
+            if points:
+                maps.append({
+                    "driver": clean(lap.get("Driver")),
+                    "lap_number": int(clean(lap.get("LapNumber")) or 0),
+                    "points": points,
+                })
+        except Exception:
+            continue
+    primary = maps[0] if maps else {"points": []}
+    return {
+        "points": primary.get("points", []),
+        "drivers": [{"driver": item["driver"], "lap_number": item["lap_number"]} for item in maps],
+        "maps": maps,
+    }
 
 
 def build_position_changes(laps):
@@ -360,6 +416,7 @@ def analytics_payload(query):
         session.load(laps=True, telemetry=True, weather=True, messages=True)
         laps = session.laps
         fastest = laps.pick_fastest()
+        trace_specs = selected_trace_specs(laps, query)
         drivers = build_driver_summary(session, laps)
         lap_rows = build_lap_rows(laps)
         stints = build_stints(laps)
@@ -403,11 +460,13 @@ def analytics_payload(query):
                 "session_name": session_name,
             },
             "drivers": drivers,
+            "lap_options": build_lap_options(laps),
+            "selected_traces": trace_specs,
             "laps": lap_rows,
             "stints": stints,
-            "telemetry_traces": build_telemetry_traces(laps),
+            "telemetry_traces": build_telemetry_traces(laps, trace_specs),
             "position_changes": build_position_changes(laps),
-            "track_map": build_track_map(laps),
+            "track_map": build_track_maps(laps, trace_specs),
             "pit_events": pit_events,
             "event_summary": {
                 "pit_stops": len(pit_events),
@@ -446,6 +505,8 @@ def fallback_analytics(season, round_number, session_name, reason=None):
             "session_name": session_name,
         },
         "drivers": [],
+        "lap_options": {},
+        "selected_traces": [],
         "laps": [],
         "stints": [],
         "telemetry_traces": [],

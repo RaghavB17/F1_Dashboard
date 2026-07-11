@@ -235,6 +235,38 @@
   }
   .driver-stats div { border-top: 1px solid var(--rule); padding-top: 8px; }
   .chart-stack { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .analysis-controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .chart-wrap {
+    display: grid;
+    gap: 8px;
+  }
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    min-height: 20px;
+    color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .legend-swatch {
+    width: 22px;
+    height: 3px;
+    background: var(--legend-color);
+    flex: 0 0 auto;
+  }
   .chart {
     min-height: 178px;
     border: 1px solid var(--rule);
@@ -333,7 +365,7 @@
   }
   @media (max-width: 1100px) {
     .overview { grid-template-columns: repeat(3, 1fr); }
-    .selector-band, .two-col, .wide { grid-template-columns: 1fr; }
+    .selector-band, .two-col, .wide, .analysis-controls { grid-template-columns: 1fr; }
   }
   @media (max-width: 680px) {
     .topbar, .shell { padding: 14px; }
@@ -461,15 +493,42 @@
   <section class="tab-panel" id="tab-telemetry">
     <article class="panel">
       <div class="panel-head"><span>Telemetry <em>Traces</em></span><span id="telemetryMeta">selected fastest laps</span></div>
-      <div class="panel-body chart-stack">
-        <div class="chart" id="speedChart"><span class="chart-label">Speed</span></div>
-        <div class="chart" id="throttleChart"><span class="chart-label">Throttle / Brake</span></div>
-        <div class="chart" id="gearChart"><span class="chart-label">Gear / RPM</span></div>
+      <div class="panel-body">
+        <div class="analysis-controls" aria-label="Telemetry trace selectors">
+          <div class="field">
+            <label for="traceDriverA">Driver A</label>
+            <select id="traceDriverA"></select>
+          </div>
+          <div class="field">
+            <label for="traceLapA">Lap A</label>
+            <select id="traceLapA"></select>
+          </div>
+          <div class="field">
+            <label for="traceDriverB">Driver B</label>
+            <select id="traceDriverB"></select>
+          </div>
+          <div class="field">
+            <label for="traceLapB">Lap B</label>
+            <select id="traceLapB"></select>
+          </div>
+        </div>
+        <div class="chart-legend" id="traceLegend"></div>
+        <div class="chart-stack">
+          <div class="chart" id="speedChart"><span class="chart-label">Speed</span></div>
+          <div class="chart" id="throttleChart"><span class="chart-label">Throttle / Brake</span></div>
+          <div class="chart" id="gearChart"><span class="chart-label">Gear / RPM</span></div>
+        </div>
       </div>
     </article>
   </section>
 
   <section class="tab-panel" id="tab-track">
+    <article class="panel" style="margin-bottom:18px;">
+      <div class="panel-head"><span>Track <em>Selection</em></span><span>uses telemetry selections</span></div>
+      <div class="panel-body">
+        <div class="chart-legend" id="trackLegend"></div>
+      </div>
+    </article>
     <div class="grid wide">
       <article class="panel">
         <div class="panel-head"><span>Position <em>Changes</em></span><span id="positionMeta">lap order</span></div>
@@ -509,7 +568,7 @@ const DEFAULT_SESSION = "R";
 const COLORS = ["#27f4d2", "#e10600", "#d4a017", "#bd82ff", "#3ddc84", "#ff7a45"];
 const $ = id => document.getElementById(id);
 
-let state = { eventsBySeason: {}, session: null };
+let state = { eventsBySeason: {}, session: null, syncingTraceControls: false };
 
 function setStatus(text) { $("status").textContent = text; }
 function setLoading(isLoading, text = "Loading session data") {
@@ -567,6 +626,51 @@ function populateDrivers(drivers) {
 function populateLaps(laps) {
   const unique = [...new Set(laps.map(lap => lap.lap_number).filter(Boolean))].sort((a, b) => a - b);
   $("lapSelect").innerHTML = option("", "All representative laps", true) + unique.map(lap => option(lap, `Lap ${lap}`, false)).join("");
+}
+
+function driverLabel(code) {
+  const drivers = state.session && state.session.drivers ? state.session.drivers : [];
+  const driver = drivers.find(item => item.code === code);
+  return driver ? `${driver.code} - ${driver.name}` : code;
+}
+
+function lapOptionsFor(driver) {
+  const options = state.session && state.session.lap_options ? state.session.lap_options : {};
+  return options[driver] || { laps: [], fastest_lap: null };
+}
+
+function renderLapSelect(selectId, driver, selectedLap) {
+  const meta = lapOptionsFor(driver);
+  const laps = meta.laps || [];
+  const fallback = selectedLap || meta.fastest_lap || laps[0] || "";
+  $(selectId).innerHTML = laps.map(lap => option(lap, `Lap ${lap}${lap === meta.fastest_lap ? " - fastest" : ""}`, String(lap) === String(fallback))).join("");
+  if (fallback) $(selectId).value = String(fallback);
+}
+
+function populateTraceControls(data) {
+  const drivers = data.drivers || [];
+  const selected = data.selected_traces || [];
+  const defaultA = selected[0]?.driver || drivers[0]?.code || "";
+  const defaultB = selected[1]?.driver || drivers[1]?.code || defaultA;
+  state.syncingTraceControls = true;
+  const driverHtml = drivers.map(driver => option(driver.code, `${driver.code} - ${driver.name}`, false)).join("");
+  $("traceDriverA").innerHTML = driverHtml;
+  $("traceDriverB").innerHTML = driverHtml;
+  if (defaultA) $("traceDriverA").value = defaultA;
+  if (defaultB) $("traceDriverB").value = defaultB;
+  renderLapSelect("traceLapA", defaultA, selected[0]?.lap_number);
+  renderLapSelect("traceLapB", defaultB, selected[1]?.lap_number);
+  state.syncingTraceControls = false;
+}
+
+function selectedTraceCodes() {
+  return [$("traceDriverA").value, $("traceDriverB").value].filter(Boolean);
+}
+
+function legendHtml(items) {
+  return items.map((item, index) => `<span class="legend-item">
+    <span class="legend-swatch" style="--legend-color:${COLORS[index % COLORS.length]}"></span>${item}
+  </span>`).join("");
 }
 
 function renderOverview(data) {
@@ -627,16 +731,20 @@ function renderWeather(weather) {
   $("weatherMeta").textContent = w.source || "session sample";
 }
 
-function pathFromPoints(points, xKey, yKey, width = 100, height = 100, invertY = false) {
+function pathFromPoints(points, xKey, yKey, width = 100, height = 100, invertY = false, padding = 6) {
   const clean = points.map(p => ({ x: numberValue(p[xKey]), y: numberValue(p[yKey]) })).filter(p => p.x != null && p.y != null);
   if (clean.length < 2) return "";
   const xs = clean.map(p => p.x), ys = clean.map(p => p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const scale = (value, min, max, size) => max === min ? size / 2 : ((value - min) / (max - min)) * size;
+  const dataW = maxX - minX || 1;
+  const dataH = maxY - minY || 1;
+  const scale = Math.min((width - padding * 2) / dataW, (height - padding * 2) / dataH);
+  const offsetX = (width - dataW * scale) / 2;
+  const offsetY = (height - dataH * scale) / 2;
   return clean.map((p, index) => {
-    const x = scale(p.x, minX, maxX, width);
-    const rawY = scale(p.y, minY, maxY, height);
+    const x = offsetX + (p.x - minX) * scale;
+    const rawY = offsetY + (p.y - minY) * scale;
     const y = invertY ? height - rawY : rawY;
     return `${index ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)}`;
   }).join(" ");
@@ -663,13 +771,13 @@ function lineChart(containerId, series, field, label, opts = {}) {
     const d = item.points.map((p, i) => `${i ? "L" : "M"} ${toX(p.distance).toFixed(2)} ${toY(p.value).toFixed(2)}`).join(" ");
     return `<path d="${d}" fill="none" stroke="${item.color}" stroke-width="2.1" vector-effect="non-scaling-stroke"/>`;
   }).join("");
-  const legend = validSeries.map(item => `<text x="3" y="${90 - validSeries.indexOf(item) * 7}" fill="${item.color}" font-size="4">${item.trace.driver} L${item.trace.lap_number}</text>`).join("");
-  el.innerHTML = `<span class="chart-label">${label}</span><svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}${legend}</svg>`;
+  el.innerHTML = `<span class="chart-label">${label}</span><svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}</svg>`;
 }
 
 function renderTelemetry(data) {
   const traces = data.telemetry_traces || [];
   $("telemetryMeta").textContent = traces.length ? traces.map(t => `${t.driver} L${t.lap_number}`).join(" vs ") : "no trace data";
+  $("traceLegend").innerHTML = traces.length ? legendHtml(traces.map(t => `${t.driver} lap ${t.lap_number}`)) : "";
   lineChart("speedChart", traces, "speed", "Speed");
   lineChart("throttleChart", traces, "throttle", "Throttle", { min: 0, max: 100 });
   lineChart("gearChart", traces, "rpm", "RPM");
@@ -678,8 +786,11 @@ function renderTelemetry(data) {
 function renderPositionChanges(data) {
   const rows = data.position_changes || [];
   const el = $("positionChart");
-  const usable = rows.filter(row => (row.points || []).length > 1).slice(0, 8);
-  $("positionMeta").textContent = usable.length ? `${usable.length} drivers` : "no order data";
+  const selected = selectedTraceCodes();
+  const usable = selected
+    .map(code => rows.find(row => row.driver === code && (row.points || []).length > 1))
+    .filter(Boolean);
+  $("positionMeta").textContent = usable.length ? usable.map(row => row.driver).join(" vs ") : "no order data";
   if (!usable.length) {
     el.innerHTML = `<div class="chart-empty">Position history unavailable for this session</div>`;
     return;
@@ -694,25 +805,26 @@ function renderPositionChanges(data) {
     }).join(" ");
     return `<path d="${d}" fill="none" stroke="${COLORS[index % COLORS.length]}" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
   }).join("");
-  const legend = usable.map((row, index) => `<text x="3" y="${92 - index * 6}" fill="${COLORS[index % COLORS.length]}" font-size="4">${row.driver}</text>`).join("");
-  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}${legend}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}</svg>`;
 }
 
 function renderTrackMap(data) {
   const track = data.track_map || {};
-  const points = track.points || [];
+  const maps = track.maps && track.maps.length ? track.maps : (track.points && track.points.length ? [{ points: track.points, driver: track.drivers?.[0]?.driver, lap_number: track.drivers?.[0]?.lap_number }] : []);
   const el = $("trackMap");
-  $("trackMeta").textContent = points.length ? `${points.length} sampled points` : "no map data";
-  const d = pathFromPoints(points, "x", "y", 84, 84, true);
-  if (!d) {
+  $("trackMeta").textContent = maps.length ? maps.map(item => `${item.driver} L${item.lap_number}`).join(" vs ") : "no map data";
+  $("trackLegend").innerHTML = maps.length ? legendHtml(maps.map(item => `${item.driver} lap ${item.lap_number}`)) : "";
+  const paths = maps.map((item, index) => {
+    const d = pathFromPoints(item.points || [], "x", "y", 100, 100, true, 8);
+    if (!d) return "";
+    return `<path d="${d}" fill="none" stroke="${COLORS[index % COLORS.length]}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  }).filter(Boolean).join("");
+  if (!paths) {
     el.innerHTML = `<div class="chart-empty">Track path unavailable for this session</div>`;
     return;
   }
   el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-    <g transform="translate(8 8)">
-      <path d="${d}" fill="none" stroke="rgba(242,236,224,.22)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="${d}" fill="none" stroke="var(--racing)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
+    <g><path d="${pathFromPoints(maps[0].points || [], "x", "y", 100, 100, true, 8)}" fill="none" stroke="rgba(242,236,224,.18)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>${paths}</g>
   </svg>`;
 }
 
@@ -744,6 +856,7 @@ function renderSession(data) {
   const laps = data.laps || [];
   populateDrivers(drivers);
   populateLaps(laps);
+  populateTraceControls(data);
   renderOverview(data);
   renderComparison();
   renderLapTable(laps);
@@ -763,6 +876,10 @@ async function loadSession() {
     round: $("raceSelect").value,
     session: $("sessionSelect").value
   });
+  if ($("traceDriverA").value) params.set("driver_a", $("traceDriverA").value);
+  if ($("traceLapA").value) params.set("lap_a", $("traceLapA").value);
+  if ($("traceDriverB").value) params.set("driver_b", $("traceDriverB").value);
+  if ($("traceLapB").value) params.set("lap_b", $("traceLapB").value);
   setStatus("Loading completed session analytics");
   setLoading(true, "Building charts and tables");
   try {
@@ -783,6 +900,22 @@ $("loadBtn").addEventListener("click", loadSession);
 $("driverA").addEventListener("change", renderComparison);
 $("driverB").addEventListener("change", renderComparison);
 $("lapSelect").addEventListener("change", () => renderLapTable((state.session && state.session.laps) || []));
+$("traceDriverA").addEventListener("change", () => {
+  if (state.syncingTraceControls) return;
+  renderLapSelect("traceLapA", $("traceDriverA").value);
+  loadSession();
+});
+$("traceDriverB").addEventListener("change", () => {
+  if (state.syncingTraceControls) return;
+  renderLapSelect("traceLapB", $("traceDriverB").value);
+  loadSession();
+});
+$("traceLapA").addEventListener("change", () => {
+  if (!state.syncingTraceControls) loadSession();
+});
+$("traceLapB").addEventListener("change", () => {
+  if (!state.syncingTraceControls) loadSession();
+});
 
 (async function bootstrap() {
   setLoading(true, "Preparing workspace");
