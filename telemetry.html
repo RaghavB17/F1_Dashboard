@@ -39,16 +39,12 @@
     gap: 18px;
     background: #0d0d0d;
   }
-  .brand {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .brand small {
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .brand small, .mono {
     font-family: "JetBrains Mono", monospace;
     color: var(--muted);
     font-size: 10px;
-    letter-spacing: .18em;
+    letter-spacing: .16em;
     text-transform: uppercase;
   }
   .brand strong {
@@ -56,7 +52,7 @@
     font-size: clamp(24px, 4vw, 38px);
     line-height: 1;
   }
-  .brand em { color: var(--racing); }
+  .brand em, .panel-head em { color: var(--racing); font-style: normal; }
   .back-btn {
     color: var(--paper);
     text-decoration: none;
@@ -76,7 +72,7 @@
   }
   .selector-band {
     display: grid;
-    grid-template-columns: repeat(4, minmax(160px, 1fr)) auto;
+    grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
     gap: 12px;
     align-items: end;
     padding: 18px;
@@ -84,12 +80,7 @@
     border: 1px solid var(--rule);
     border-top: 4px solid var(--racing);
   }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    min-width: 0;
-  }
+  .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
   .field label {
     color: var(--muted);
     font-family: "JetBrains Mono", monospace;
@@ -114,26 +105,87 @@
     letter-spacing: .12em;
     text-transform: uppercase;
   }
-  .status {
-    margin: 14px 0 20px;
-    min-height: 22px;
+  .load-btn:disabled { cursor: wait; opacity: .65; }
+  .status-row {
+    margin: 14px 0 18px;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
     color: var(--muted);
     font-family: "JetBrains Mono", monospace;
     font-size: 11px;
     letter-spacing: .12em;
     text-transform: uppercase;
   }
-  .grid {
-    display: grid;
-    gap: 18px;
+  .loader {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    color: var(--paper);
   }
-  .overview {
-    grid-template-columns: repeat(6, minmax(130px, 1fr));
+  body.is-loading .loader { display: inline-flex; }
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(242,236,224,.18);
+    border-top-color: var(--racing);
+    border-radius: 50%;
+    animation: spin .85s linear infinite;
   }
-  .card, .panel {
-    background: var(--carbon-2);
+  .progress {
+    width: min(340px, 42vw);
+    height: 4px;
+    background: rgba(242,236,224,.12);
+    overflow: hidden;
+  }
+  .progress span {
+    display: block;
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--racing), var(--gold));
+    animation: sweep 1.15s ease-in-out infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes sweep {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(270%); }
+  }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 18px;
+  }
+  .tab-btn {
+    min-height: 42px;
+    padding: 0 16px;
     border: 1px solid var(--rule);
+    border-bottom: 0;
+    background: #0d0d0d;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
+  .tab-btn.active {
+    color: var(--paper);
+    background: var(--carbon-2);
+    border-top: 3px solid var(--racing);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .grid { display: grid; gap: 18px; }
+  .overview { grid-template-columns: repeat(6, minmax(130px, 1fr)); }
+  .two-col { grid-template-columns: minmax(320px, .9fr) minmax(420px, 1.4fr); }
+  .wide { grid-template-columns: minmax(440px, 1.15fr) minmax(340px, .85fr); }
+  .card, .panel { background: var(--carbon-2); border: 1px solid var(--rule); }
   .metric {
     padding: 16px;
     min-height: 108px;
@@ -141,26 +193,15 @@
     flex-direction: column;
     justify-content: space-between;
   }
-  .metric span {
+  .metric span, .driver-stats span, .weather-grid span {
     color: var(--muted);
     font-family: "JetBrains Mono", monospace;
     font-size: 10px;
-    letter-spacing: .16em;
+    letter-spacing: .14em;
     text-transform: uppercase;
   }
-  .metric strong {
-    font-size: clamp(18px, 2vw, 25px);
-    line-height: 1.08;
-  }
+  .metric strong { font-size: clamp(18px, 2vw, 25px); line-height: 1.08; }
   .metric small { color: var(--paper-2); }
-  .two-col {
-    grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.4fr);
-    margin-top: 18px;
-  }
-  .wide {
-    grid-template-columns: minmax(440px, 1.15fr) minmax(340px, .85fr);
-    margin-top: 18px;
-  }
   .panel-head {
     display: flex;
     align-items: center;
@@ -172,10 +213,6 @@
     font-size: 11px;
     letter-spacing: .16em;
     text-transform: uppercase;
-  }
-  .panel-head em {
-    color: var(--racing);
-    font-style: normal;
   }
   .panel-body { padding: 16px; }
   .compare-controls {
@@ -189,34 +226,17 @@
     background: var(--carbon-3);
     padding: 14px;
   }
-  .driver-card h3 {
-    font-size: 20px;
-    margin-bottom: 10px;
-  }
+  .driver-card h3 { font-size: 20px; margin-bottom: 10px; }
+  .driver-card small { color: var(--muted); font-weight: 500; }
   .driver-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
-  .driver-stats div {
-    border-top: 1px solid var(--rule);
-    padding-top: 8px;
-  }
-  .driver-stats span {
-    display: block;
-    color: var(--muted);
-    font-family: "JetBrains Mono", monospace;
-    font-size: 9px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-  }
-  .chart-stack {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+  .driver-stats div { border-top: 1px solid var(--rule); padding-top: 8px; }
+  .chart-stack { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .chart {
-    min-height: 118px;
+    min-height: 178px;
     border: 1px solid var(--rule);
     background:
       linear-gradient(rgba(242,236,224,0.045) 1px, transparent 1px),
@@ -226,15 +246,11 @@
     position: relative;
     overflow: hidden;
   }
-  .chart::before {
-    content: "";
+  .chart svg {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 24%;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--cyan), var(--racing), transparent);
-    transform: skewY(-4deg);
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
   .chart .chart-label {
     position: absolute;
@@ -245,12 +261,22 @@
     font-size: 10px;
     letter-spacing: .16em;
     text-transform: uppercase;
+    z-index: 2;
   }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
+  .chart-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: .13em;
+    text-align: center;
+    text-transform: uppercase;
   }
+  table { width: 100%; border-collapse: collapse; text-align: left; }
   th, td {
     padding: 11px 10px;
     border-bottom: 1px solid var(--rule);
@@ -266,11 +292,7 @@
   }
   td.num { font-family: "JetBrains Mono", monospace; text-align: right; }
   .table-wrap { overflow-x: auto; }
-  .pill-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill {
     border: 1px solid var(--rule);
     padding: 7px 9px;
@@ -285,36 +307,9 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
   }
-  .weather-grid div {
-    background: var(--carbon-3);
-    padding: 13px;
-  }
-  .weather-grid span {
-    display: block;
-    color: var(--muted);
-    font-family: "JetBrains Mono", monospace;
-    font-size: 9px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-  .placeholder {
-    min-height: 220px;
-    border: 1px dashed rgba(242,236,224,0.22);
-    display: grid;
-    place-items: center;
-    color: var(--muted);
-    font-family: "JetBrains Mono", monospace;
-    font-size: 11px;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    text-align: center;
-    padding: 18px;
-  }
-  .messages {
-    display: grid;
-    gap: 8px;
-  }
+  .weather-grid div { background: var(--carbon-3); padding: 13px; }
+  .weather-grid span { display: block; margin-bottom: 8px; }
+  .messages { display: grid; gap: 8px; }
   .message {
     padding: 10px 12px;
     background: var(--carbon-3);
@@ -345,6 +340,8 @@
     .topbar { align-items: flex-start; flex-direction: column; }
     .overview, .compare-controls, .weather-grid { grid-template-columns: 1fr; }
     table { min-width: 620px; }
+    .status-row { align-items: flex-start; flex-direction: column; }
+    .progress { width: 100%; }
   }
 </style>
 </head>
@@ -385,95 +382,123 @@
     </div>
     <button class="load-btn" id="loadBtn" type="button">Load Session</button>
   </section>
-  <div class="status" id="status">Preparing analytics workspace</div>
 
-  <section class="grid overview" id="overviewCards"></section>
+  <div class="status-row">
+    <div id="status">Preparing analytics workspace</div>
+    <div class="loader" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="loaderText">Loading session data</span>
+      <span class="progress" aria-hidden="true"><span></span></span>
+    </div>
+  </div>
 
-  <section class="grid two-col">
-    <article class="panel">
-      <div class="panel-head"><span>Driver <em>Comparison</em></span><span id="driverCount">--</span></div>
-      <div class="panel-body">
-        <div class="compare-controls">
-          <div class="field">
-            <label for="driverA">Driver A</label>
-            <select id="driverA"></select>
-          </div>
-          <div class="field">
-            <label for="driverB">Driver B</label>
-            <select id="driverB"></select>
-          </div>
+  <nav class="tabs" aria-label="Race Analytics workspace">
+    <button class="tab-btn active" type="button" data-tab="overview">Overview</button>
+    <button class="tab-btn" type="button" data-tab="drivers">Drivers</button>
+    <button class="tab-btn" type="button" data-tab="telemetry">Telemetry</button>
+    <button class="tab-btn" type="button" data-tab="track">Track</button>
+    <button class="tab-btn" type="button" data-tab="events">Events</button>
+  </nav>
+
+  <section class="tab-panel active" id="tab-overview">
+    <div class="grid overview" id="overviewCards"></div>
+    <div class="grid wide" style="margin-top:18px;">
+      <article class="panel">
+        <div class="panel-head"><span>Podium</span><span id="podiumMeta">--</span></div>
+        <div class="panel-body table-wrap">
+          <table>
+            <thead><tr><th>Pos</th><th>Driver</th><th>Team</th><th class="num">Time</th></tr></thead>
+            <tbody id="podiumTable"></tbody>
+          </table>
         </div>
-        <div class="grid" id="comparisonCards"></div>
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-head"><span>Telemetry <em>Traces</em></span><span>future FastF1 channels</span></div>
-      <div class="panel-body chart-stack">
-        <div class="chart"><span class="chart-label">Speed trace</span></div>
-        <div class="chart"><span class="chart-label">Throttle / Brake</span></div>
-        <div class="chart"><span class="chart-label">Gear / RPM</span></div>
-      </div>
-    </article>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><span>Weather</span><span id="weatherMeta">session sample</span></div>
+        <div class="panel-body weather-grid" id="weatherGrid"></div>
+      </article>
+    </div>
   </section>
 
-  <section class="grid wide">
-    <article class="panel">
+  <section class="tab-panel" id="tab-drivers">
+    <div class="grid two-col">
+      <article class="panel">
+        <div class="panel-head"><span>Driver <em>Comparison</em></span><span id="driverCount">--</span></div>
+        <div class="panel-body">
+          <div class="compare-controls">
+            <div class="field">
+              <label for="driverA">Driver A</label>
+              <select id="driverA"></select>
+            </div>
+            <div class="field">
+              <label for="driverB">Driver B</label>
+              <select id="driverB"></select>
+            </div>
+          </div>
+          <div class="grid" id="comparisonCards"></div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><span>Tyres <em>and Stints</em></span><span>completed session</span></div>
+        <div class="panel-body"><div class="pill-row" id="stintsBody"></div></div>
+      </article>
+    </div>
+    <article class="panel" style="margin-top:18px;">
       <div class="panel-head"><span>Lap <em>Analysis</em></span><span id="lapMeta">--</span></div>
       <div class="panel-body table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Driver</th>
-              <th class="num">Lap</th>
-              <th class="num">Lap Time</th>
-              <th class="num">S1</th>
-              <th class="num">S2</th>
-              <th class="num">S3</th>
-              <th>Tyre</th>
+              <th>Driver</th><th class="num">Lap</th><th class="num">Lap Time</th>
+              <th class="num">S1</th><th class="num">S2</th><th class="num">S3</th><th>Tyre</th>
             </tr>
           </thead>
           <tbody id="lapTable"></tbody>
         </table>
       </div>
     </article>
+  </section>
 
+  <section class="tab-panel" id="tab-telemetry">
     <article class="panel">
-      <div class="panel-head"><span>Tyres <em>and Stints</em></span><span>completed session</span></div>
-      <div class="panel-body">
-        <div class="pill-row" id="stintsBody"></div>
+      <div class="panel-head"><span>Telemetry <em>Traces</em></span><span id="telemetryMeta">selected fastest laps</span></div>
+      <div class="panel-body chart-stack">
+        <div class="chart" id="speedChart"><span class="chart-label">Speed</span></div>
+        <div class="chart" id="throttleChart"><span class="chart-label">Throttle / Brake</span></div>
+        <div class="chart" id="gearChart"><span class="chart-label">Gear / RPM</span></div>
       </div>
     </article>
   </section>
 
-  <section class="grid wide">
-    <article class="panel">
-      <div class="panel-head"><span>Position <em>Changes</em></span><span>chart placeholder</span></div>
-      <div class="panel-body">
-        <div class="placeholder">Position chart will use FastF1 lap-by-lap order data</div>
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-head"><span>Weather</span><span id="weatherMeta">session sample</span></div>
-      <div class="panel-body weather-grid" id="weatherGrid"></div>
-    </article>
+  <section class="tab-panel" id="tab-track">
+    <div class="grid wide">
+      <article class="panel">
+        <div class="panel-head"><span>Position <em>Changes</em></span><span id="positionMeta">lap order</span></div>
+        <div class="panel-body"><div class="chart" id="positionChart"></div></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><span>Track <em>Map</em></span><span id="trackMeta">sampled lap path</span></div>
+        <div class="panel-body"><div class="chart" id="trackMap"></div></div>
+      </article>
+    </div>
   </section>
 
-  <section class="grid wide">
-    <article class="panel">
-      <div class="panel-head"><span>Track <em>Map</em></span><span>future circuit overlay</span></div>
-      <div class="panel-body">
-        <div class="placeholder">Track map placeholder for FastF1 circuit and car position data</div>
-      </div>
-    </article>
-
-    <article class="panel">
-      <div class="panel-head"><span>Race Control <em>Messages</em></span><span id="messageMeta">--</span></div>
-      <div class="panel-body">
-        <div class="messages" id="messagesBody"></div>
-      </div>
-    </article>
+  <section class="tab-panel" id="tab-events">
+    <div class="grid overview" id="eventCards"></div>
+    <div class="grid wide" style="margin-top:18px;">
+      <article class="panel">
+        <div class="panel-head"><span>Pit <em>Stops</em></span><span id="pitMeta">--</span></div>
+        <div class="panel-body table-wrap">
+          <table>
+            <thead><tr><th>Driver</th><th class="num">Lap</th><th>In</th><th>Out</th></tr></thead>
+            <tbody id="pitTable"></tbody>
+          </table>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><span>Race Control <em>Messages</em></span><span id="messageMeta">--</span></div>
+        <div class="panel-body"><div class="messages" id="messagesBody"></div></div>
+      </article>
+    </div>
   </section>
 </main>
 
@@ -481,33 +506,37 @@
 const API_URL = "/api/race_analytics";
 const DEFAULT_SEASON = 2025;
 const DEFAULT_SESSION = "R";
+const COLORS = ["#27f4d2", "#e10600", "#d4a017", "#bd82ff", "#3ddc84", "#ff7a45"];
 const $ = id => document.getElementById(id);
 
-let state = {
-  eventsBySeason: {},
-  session: null
-};
+let state = { eventsBySeason: {}, session: null };
 
-function setStatus(text) {
-  $("status").textContent = text;
+function setStatus(text) { $("status").textContent = text; }
+function setLoading(isLoading, text = "Loading session data") {
+  document.body.classList.toggle("is-loading", isLoading);
+  $("loaderText").textContent = text;
+  $("loadBtn").disabled = isLoading;
 }
-
-function fmt(value, fallback = "--") {
-  return value == null || value === "" ? fallback : value;
+function fmt(value, fallback = "--") { return value == null || value === "" ? fallback : value; }
+function numberValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
-
 function metric(label, value, sub = "") {
   return `<div class="card metric"><span>${label}</span><strong>${fmt(value)}</strong><small>${sub}</small></div>`;
 }
-
 function option(value, label, selected) {
   return `<option value="${String(value).replace(/"/g, "&quot;")}"${selected ? " selected" : ""}>${label}</option>`;
 }
-
 async function fetchJson(url) {
   const response = await fetch(url, { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
+}
+
+function setActiveTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === name));
+  document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active", panel.id === `tab-${name}`));
 }
 
 async function loadOptions() {
@@ -542,22 +571,27 @@ function populateLaps(laps) {
 
 function renderOverview(data) {
   const o = data.overview || {};
+  const podium = o.podium || [];
   $("overviewCards").innerHTML = [
     metric("Winner", o.winner, o.winner_team || ""),
+    metric("Podium", podium.map(p => p.driver).filter(Boolean).join(" / "), data.event_name || ""),
     metric("Fastest Lap", o.fastest_lap_driver, o.fastest_lap_time || ""),
-    metric("Safety Cars", o.safety_cars, "race control derived"),
     metric("Weather", o.weather_summary, o.air_track_summary || ""),
-    metric("Total Laps", o.total_laps, o.session_name || ""),
-    metric("Race Duration", o.race_duration, data.event_name || "")
+    metric("Safety Cars", o.safety_cars, "race control derived"),
+    metric("Race Duration", o.race_duration, o.session_name || "")
   ].join("");
+  $("podiumMeta").textContent = podium.length ? `${podium.length} finishers shown` : "no podium data";
+  $("podiumTable").innerHTML = podium.length ? podium.map(row => `<tr>
+    <td>P${fmt(row.position)}</td><td>${fmt(row.name || row.driver)}</td><td>${fmt(row.team)}</td><td class="num">${fmt(row.time)}</td>
+  </tr>`).join("") : `<tr><td colspan="4" class="empty">Podium data unavailable</td></tr>`;
 }
 
 function renderComparison() {
   const drivers = state.session && state.session.drivers ? state.session.drivers : [];
   const selected = [$("driverA").value, $("driverB").value];
-  const cards = selected.map(code => {
+  $("comparisonCards").innerHTML = selected.map((code, index) => {
     const driver = drivers.find(item => item.code === code) || {};
-    return `<div class="driver-card" style="--accent:${driver.team_color || "var(--racing)"}">
+    return `<div class="driver-card" style="--accent:${driver.team_color || COLORS[index]}">
       <h3>${fmt(driver.code)} <small>${fmt(driver.name, "")}</small></h3>
       <div class="driver-stats">
         <div><span>Best Lap</span>${fmt(driver.best_lap)}</div>
@@ -565,8 +599,7 @@ function renderComparison() {
         <div><span>Laps</span>${fmt(driver.laps)}</div>
       </div>
     </div>`;
-  });
-  $("comparisonCards").innerHTML = cards.join("");
+  }).join("");
 }
 
 function renderLapTable(laps) {
@@ -574,13 +607,8 @@ function renderLapTable(laps) {
   const rows = (focus ? laps.filter(lap => String(lap.lap_number) === focus) : laps).slice(0, 40);
   $("lapMeta").textContent = focus ? `Lap ${focus}` : `${laps.length} ranked laps`;
   $("lapTable").innerHTML = rows.length ? rows.map(lap => `<tr>
-    <td>${fmt(lap.driver)}</td>
-    <td class="num">${fmt(lap.lap_number)}</td>
-    <td class="num">${fmt(lap.lap_time)}</td>
-    <td class="num">${fmt(lap.sector_1)}</td>
-    <td class="num">${fmt(lap.sector_2)}</td>
-    <td class="num">${fmt(lap.sector_3)}</td>
-    <td>${fmt(lap.compound)}</td>
+    <td>${fmt(lap.driver)}</td><td class="num">${fmt(lap.lap_number)}</td><td class="num">${fmt(lap.lap_time)}</td>
+    <td class="num">${fmt(lap.sector_1)}</td><td class="num">${fmt(lap.sector_2)}</td><td class="num">${fmt(lap.sector_3)}</td><td>${fmt(lap.compound)}</td>
   </tr>`).join("") : `<tr><td colspan="7" class="empty">Lap data unavailable for this selection</td></tr>`;
 }
 
@@ -593,18 +621,120 @@ function renderStints(stints) {
 function renderWeather(weather) {
   const w = weather || {};
   $("weatherGrid").innerHTML = [
-    ["Air Temp", w.air_temperature],
-    ["Track Temp", w.track_temperature],
-    ["Humidity", w.humidity],
-    ["Rainfall", w.rainfall]
+    ["Air Temp", w.air_temperature], ["Track Temp", w.track_temperature],
+    ["Humidity", w.humidity], ["Rainfall", w.rainfall]
   ].map(([label, value]) => `<div><span>${label}</span><strong>${fmt(value)}</strong></div>`).join("");
   $("weatherMeta").textContent = w.source || "session sample";
 }
 
-function renderMessages(messages) {
+function pathFromPoints(points, xKey, yKey, width = 100, height = 100, invertY = false) {
+  const clean = points.map(p => ({ x: numberValue(p[xKey]), y: numberValue(p[yKey]) })).filter(p => p.x != null && p.y != null);
+  if (clean.length < 2) return "";
+  const xs = clean.map(p => p.x), ys = clean.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const scale = (value, min, max, size) => max === min ? size / 2 : ((value - min) / (max - min)) * size;
+  return clean.map((p, index) => {
+    const x = scale(p.x, minX, maxX, width);
+    const rawY = scale(p.y, minY, maxY, height);
+    const y = invertY ? height - rawY : rawY;
+    return `${index ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+  }).join(" ");
+}
+
+function lineChart(containerId, series, field, label, opts = {}) {
+  const el = $(containerId);
+  const validSeries = (series || []).map((trace, index) => {
+    const points = (trace.points || []).map(p => ({ distance: numberValue(p.distance), value: numberValue(p[field]) })).filter(p => p.distance != null && p.value != null);
+    return { trace, points, color: COLORS[index % COLORS.length] };
+  }).filter(item => item.points.length > 1);
+  if (!validSeries.length) {
+    el.innerHTML = `<span class="chart-label">${label}</span><div class="chart-empty">Data unavailable for this channel</div>`;
+    return;
+  }
+  const values = validSeries.flatMap(item => item.points.map(p => p.value));
+  const distances = validSeries.flatMap(item => item.points.map(p => p.distance));
+  const minV = opts.min ?? Math.min(...values);
+  const maxV = opts.max ?? Math.max(...values);
+  const minD = Math.min(...distances), maxD = Math.max(...distances);
+  const toX = d => maxD === minD ? 50 : ((d - minD) / (maxD - minD)) * 100;
+  const toY = v => maxV === minV ? 50 : 92 - (((v - minV) / (maxV - minV)) * 78);
+  const paths = validSeries.map(item => {
+    const d = item.points.map((p, i) => `${i ? "L" : "M"} ${toX(p.distance).toFixed(2)} ${toY(p.value).toFixed(2)}`).join(" ");
+    return `<path d="${d}" fill="none" stroke="${item.color}" stroke-width="2.1" vector-effect="non-scaling-stroke"/>`;
+  }).join("");
+  const legend = validSeries.map(item => `<text x="3" y="${90 - validSeries.indexOf(item) * 7}" fill="${item.color}" font-size="4">${item.trace.driver} L${item.trace.lap_number}</text>`).join("");
+  el.innerHTML = `<span class="chart-label">${label}</span><svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}${legend}</svg>`;
+}
+
+function renderTelemetry(data) {
+  const traces = data.telemetry_traces || [];
+  $("telemetryMeta").textContent = traces.length ? traces.map(t => `${t.driver} L${t.lap_number}`).join(" vs ") : "no trace data";
+  lineChart("speedChart", traces, "speed", "Speed");
+  lineChart("throttleChart", traces, "throttle", "Throttle", { min: 0, max: 100 });
+  lineChart("gearChart", traces, "rpm", "RPM");
+}
+
+function renderPositionChanges(data) {
+  const rows = data.position_changes || [];
+  const el = $("positionChart");
+  const usable = rows.filter(row => (row.points || []).length > 1).slice(0, 8);
+  $("positionMeta").textContent = usable.length ? `${usable.length} drivers` : "no order data";
+  if (!usable.length) {
+    el.innerHTML = `<div class="chart-empty">Position history unavailable for this session</div>`;
+    return;
+  }
+  const maxLap = Math.max(...usable.flatMap(row => row.points.map(p => p.lap)));
+  const maxPos = Math.max(...usable.flatMap(row => row.points.map(p => p.position)));
+  const paths = usable.map((row, index) => {
+    const d = row.points.map((p, i) => {
+      const x = maxLap <= 1 ? 0 : ((p.lap - 1) / (maxLap - 1)) * 100;
+      const y = maxPos <= 1 ? 50 : ((p.position - 1) / (maxPos - 1)) * 82 + 8;
+      return `${i ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    }).join(" ");
+    return `<path d="${d}" fill="none" stroke="${COLORS[index % COLORS.length]}" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
+  }).join("");
+  const legend = usable.map((row, index) => `<text x="3" y="${92 - index * 6}" fill="${COLORS[index % COLORS.length]}" font-size="4">${row.driver}</text>`).join("");
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}${legend}</svg>`;
+}
+
+function renderTrackMap(data) {
+  const track = data.track_map || {};
+  const points = track.points || [];
+  const el = $("trackMap");
+  $("trackMeta").textContent = points.length ? `${points.length} sampled points` : "no map data";
+  const d = pathFromPoints(points, "x", "y", 84, 84, true);
+  if (!d) {
+    el.innerHTML = `<div class="chart-empty">Track path unavailable for this session</div>`;
+    return;
+  }
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+    <g transform="translate(8 8)">
+      <path d="${d}" fill="none" stroke="rgba(242,236,224,.22)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${d}" fill="none" stroke="var(--racing)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </svg>`;
+}
+
+function renderEvents(data) {
+  const summary = data.event_summary || {};
+  const pits = data.pit_events || [];
+  const messages = data.race_control || [];
+  $("eventCards").innerHTML = [
+    metric("Pit Stops", summary.pit_stops ?? pits.length, "detected from pit lane timing"),
+    metric("Yellow Flags", summary.yellow_flags, "race control mentions"),
+    metric("Safety Cars", summary.safety_cars, "race control mentions"),
+    metric("Messages", messages.length, "race control log"),
+    metric("Session", data.session_name, data.event_name),
+    metric("Round", data.round, data.season)
+  ].join("");
+  $("pitMeta").textContent = `${pits.length} stops`;
+  $("pitTable").innerHTML = pits.length ? pits.map(pit => `<tr>
+    <td>${fmt(pit.driver)}</td><td class="num">${fmt(pit.lap)}</td><td>${fmt(pit.in_time)}</td><td>${fmt(pit.out_time)}</td>
+  </tr>`).join("") : `<tr><td colspan="4" class="empty">Pit stop data unavailable</td></tr>`;
   $("messageMeta").textContent = `${messages.length} messages`;
   $("messagesBody").innerHTML = messages.length
-    ? messages.slice(0, 12).map(msg => `<div class="message"><strong>${fmt(msg.time, "session")}</strong><br>${fmt(msg.message)}</div>`).join("")
+    ? messages.slice(0, 14).map(msg => `<div class="message"><strong>${fmt(msg.time, "session")}</strong><br>${fmt(msg.message)}</div>`).join("")
     : `<div class="empty">Race control messages unavailable</div>`;
 }
 
@@ -619,9 +749,12 @@ function renderSession(data) {
   renderLapTable(laps);
   renderStints(data.stints || []);
   renderWeather(data.weather);
-  renderMessages(data.race_control || []);
-  const source = data.source === "fastf1" ? "FastF1 data loaded" : "Fallback analytics loaded";
-  setStatus(`${source} - ${data.season} ${data.event_name} ${data.session_name}`);
+  renderTelemetry(data);
+  renderPositionChanges(data);
+  renderTrackMap(data);
+  renderEvents(data);
+  const loaded = data.source === "fallback" ? "Fallback analytics loaded" : "Session analytics loaded";
+  setStatus(`${loaded} - ${data.season} ${data.event_name} ${data.session_name}`);
 }
 
 async function loadSession() {
@@ -631,21 +764,19 @@ async function loadSession() {
     session: $("sessionSelect").value
   });
   setStatus("Loading completed session analytics");
-  $("loadBtn").disabled = true;
+  setLoading(true, "Building charts and tables");
   try {
     renderSession(await fetchJson(`${API_URL}?${params}`));
   } catch (error) {
     console.warn(error);
-    setStatus("Analytics data unavailable. Check the FastF1 backend route.");
+    setStatus("Analytics data unavailable. Try another completed session.");
   } finally {
-    $("loadBtn").disabled = false;
+    setLoading(false);
   }
 }
 
-$("seasonSelect").addEventListener("change", () => {
-  renderRaceOptions();
-  loadSession();
-});
+document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => setActiveTab(btn.dataset.tab)));
+$("seasonSelect").addEventListener("change", () => { renderRaceOptions(); loadSession(); });
 $("raceSelect").addEventListener("change", loadSession);
 $("sessionSelect").addEventListener("change", loadSession);
 $("loadBtn").addEventListener("click", loadSession);
@@ -654,12 +785,14 @@ $("driverB").addEventListener("change", renderComparison);
 $("lapSelect").addEventListener("change", () => renderLapTable((state.session && state.session.laps) || []));
 
 (async function bootstrap() {
+  setLoading(true, "Preparing workspace");
   try {
     await loadOptions();
     await loadSession();
   } catch (error) {
     console.warn(error);
     setStatus("Unable to initialize Race Analytics");
+    setLoading(false);
   }
 })();
 </script>

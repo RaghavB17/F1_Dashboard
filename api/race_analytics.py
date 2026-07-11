@@ -134,7 +134,7 @@ def options_payload():
                 events_by_season[str(season)] = events
         if events_by_season:
             return {
-                "source": "fastf1",
+                "source": "session-data",
                 "seasons": [int(year) for year in events_by_season.keys()],
                 "events_by_season": events_by_season,
             }
@@ -173,6 +173,21 @@ def build_driver_summary(session, laps):
     return drivers
 
 
+def build_podium(results):
+    if results is None or results.empty:
+        return []
+    rows = []
+    for _, row in results.sort_values("Position").head(3).iterrows():
+        rows.append({
+            "position": int(clean(row.get("Position")) or len(rows) + 1),
+            "driver": clean(row.get("Abbreviation")) or clean(row.get("FullName")),
+            "name": clean(row.get("FullName")) or clean(row.get("Abbreviation")),
+            "team": clean(row.get("TeamName")),
+            "time": str(clean(row.get("Time")) or clean(row.get("Status")) or ""),
+        })
+    return rows
+
+
 def build_lap_rows(laps):
     quick = laps.dropna(subset=["LapTime"]).sort_values("LapTime").head(80)
     rows = []
@@ -189,6 +204,87 @@ def build_lap_rows(laps):
     return rows
 
 
+def sample_rows(frame, limit=90):
+    if frame is None or frame.empty:
+        return []
+    if len(frame) <= limit:
+        return frame
+    step = max(1, len(frame) // limit)
+    return frame.iloc[::step].head(limit)
+
+
+def build_telemetry_traces(laps):
+    traces = []
+    if laps.empty:
+        return traces
+    driver_codes = list(laps.dropna(subset=["LapTime"]).sort_values("LapTime")["Driver"].dropna().unique())[:2]
+    for code in driver_codes:
+        try:
+            fastest = laps[laps["Driver"] == code].pick_fastest()
+            car_data = fastest.get_car_data().add_distance()
+            points = []
+            for _, row in sample_rows(car_data).iterrows():
+                points.append({
+                    "distance": round(float(clean(row.get("Distance")) or 0), 1),
+                    "speed": clean(row.get("Speed")),
+                    "throttle": clean(row.get("Throttle")),
+                    "brake": 100 if clean(row.get("Brake")) else 0,
+                    "gear": clean(row.get("nGear")),
+                    "rpm": clean(row.get("RPM")),
+                })
+            if points:
+                traces.append({
+                    "driver": code,
+                    "lap_number": int(clean(fastest.get("LapNumber")) or 0),
+                    "lap_time": format_duration(fastest.get("LapTime")),
+                    "points": points,
+                })
+        except Exception:
+            continue
+    return traces
+
+
+def build_track_map(laps):
+    if laps.empty:
+        return {"points": [], "drivers": []}
+    try:
+        fastest = laps.dropna(subset=["LapTime"]).pick_fastest()
+        pos_data = fastest.get_pos_data()
+        points = []
+        for _, row in sample_rows(pos_data, 120).iterrows():
+            x = clean(row.get("X"))
+            y = clean(row.get("Y"))
+            if x is None or y is None:
+                continue
+            points.append({"x": round(float(x), 2), "y": round(float(y), 2)})
+        return {
+            "points": points,
+            "drivers": [{
+                "driver": clean(fastest.get("Driver")),
+                "lap_number": int(clean(fastest.get("LapNumber")) or 0),
+            }] if points else [],
+        }
+    except Exception:
+        return {"points": [], "drivers": []}
+
+
+def build_position_changes(laps):
+    if "Position" not in laps.columns or laps.empty:
+        return []
+    rows = []
+    for driver in sorted(laps["Driver"].dropna().unique()):
+        driver_laps = laps[laps["Driver"] == driver].dropna(subset=["LapNumber", "Position"])
+        points = []
+        for _, lap in driver_laps.sort_values("LapNumber").iterrows():
+            points.append({
+                "lap": int(clean(lap.get("LapNumber")) or 0),
+                "position": int(clean(lap.get("Position")) or 0),
+            })
+        if points:
+            rows.append({"driver": clean(driver), "points": points})
+    return rows[:20]
+
+
 def build_stints(laps):
     rows = []
     required = {"Driver", "Compound", "Stint", "LapNumber"}
@@ -203,6 +299,22 @@ def build_stints(laps):
             "end_lap": int(stint_laps["LapNumber"].max()),
         })
     return rows[:40]
+
+
+def build_pit_events(laps):
+    events = []
+    required = {"Driver", "LapNumber", "PitInTime", "PitOutTime"}
+    if not required.issubset(set(laps.columns)):
+        return events
+    pit_laps = laps[laps["PitInTime"].notna() | laps["PitOutTime"].notna()]
+    for _, lap in pit_laps.iterrows():
+        events.append({
+            "driver": clean(lap.get("Driver")),
+            "lap": int(clean(lap.get("LapNumber")) or 0),
+            "in_time": str(clean(lap.get("PitInTime")) or ""),
+            "out_time": str(clean(lap.get("PitOutTime")) or ""),
+        })
+    return events[:50]
 
 
 def build_weather(session):
@@ -232,6 +344,10 @@ def build_messages(session):
     return rows
 
 
+def message_count(messages, needle):
+    return sum(1 for item in messages if needle in (item.get("message") or "").upper())
+
+
 def analytics_payload(query):
     season = int(query.get("season", ["2025"])[0] or 2025)
     round_number = int(query.get("round", ["24"])[0] or 24)
@@ -241,29 +357,34 @@ def analytics_payload(query):
     try:
         fastf1 = get_fastf1()
         session = fastf1.get_session(season, round_number, session_code)
-        session.load(laps=True, telemetry=False, weather=True, messages=True)
+        session.load(laps=True, telemetry=True, weather=True, messages=True)
         laps = session.laps
         fastest = laps.pick_fastest()
         drivers = build_driver_summary(session, laps)
         lap_rows = build_lap_rows(laps)
         stints = build_stints(laps)
         messages = build_messages(session)
-        safety_cars = sum(1 for item in messages if "SAFETY CAR" in (item.get("message") or "").upper())
+        safety_cars = message_count(messages, "SAFETY CAR")
         winner = drivers[0]["name"] if drivers else None
         winner_team = drivers[0]["team"] if drivers else None
         results = getattr(session, "results", None)
+        podium = build_podium(results)
+        race_duration = None
         if results is not None and not results.empty:
             top = results.sort_values("Position").iloc[0]
             winner = clean(top.get("FullName")) or clean(top.get("Abbreviation")) or winner
             winner_team = clean(top.get("TeamName")) or winner_team
+            race_duration = str(clean(top.get("Time")) or "")
 
         total_laps = int(laps["LapNumber"].max()) if not laps.empty else None
         weather = build_weather(session)
         event = getattr(session, "event", {})
         event_name = clean(event.get("EventName")) if hasattr(event, "get") else None
+        pit_events = build_pit_events(laps)
+        yellow_flags = message_count(messages, "YELLOW")
 
         return {
-            "source": "fastf1",
+            "source": "session-data",
             "season": season,
             "round": round_number,
             "event_name": event_name or f"Round {round_number}",
@@ -271,18 +392,28 @@ def analytics_payload(query):
             "overview": {
                 "winner": winner,
                 "winner_team": winner_team,
+                "podium": podium,
                 "fastest_lap_driver": clean(scalar(fastest, "Driver")),
                 "fastest_lap_time": format_duration(scalar(fastest, "LapTime")),
                 "safety_cars": safety_cars,
                 "weather_summary": weather.get("track_temperature") or weather.get("source"),
                 "air_track_summary": weather.get("air_temperature"),
                 "total_laps": total_laps,
-                "race_duration": None,
+                "race_duration": race_duration,
                 "session_name": session_name,
             },
             "drivers": drivers,
             "laps": lap_rows,
             "stints": stints,
+            "telemetry_traces": build_telemetry_traces(laps),
+            "position_changes": build_position_changes(laps),
+            "track_map": build_track_map(laps),
+            "pit_events": pit_events,
+            "event_summary": {
+                "pit_stops": len(pit_events),
+                "yellow_flags": yellow_flags,
+                "safety_cars": safety_cars,
+            },
             "weather": weather,
             "race_control": messages,
         }
@@ -308,8 +439,8 @@ def fallback_analytics(season, round_number, session_name, reason=None):
             "fastest_lap_driver": None,
             "fastest_lap_time": None,
             "safety_cars": None,
-            "weather_summary": "FastF1 unavailable",
-            "air_track_summary": "Install backend dependencies",
+            "weather_summary": "Data unavailable",
+            "air_track_summary": "Try another completed session",
             "total_laps": None,
             "race_duration": None,
             "session_name": session_name,
@@ -317,7 +448,12 @@ def fallback_analytics(season, round_number, session_name, reason=None):
         "drivers": [],
         "laps": [],
         "stints": [],
-        "weather": {"source": "FastF1 unavailable"},
+        "telemetry_traces": [],
+        "position_changes": [],
+        "track_map": {"points": [], "drivers": []},
+        "pit_events": [],
+        "event_summary": {"pit_stops": 0, "yellow_flags": 0, "safety_cars": 0},
+        "weather": {"source": "unavailable"},
         "race_control": [],
     }
 
