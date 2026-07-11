@@ -12,6 +12,17 @@ const getRaces = data => data?.MRData?.RaceTable?.Races || [];
 const getStandingsList = data => data?.MRData?.StandingsTable?.StandingsLists?.[0] || {};
 const shortDriverName = driver => `${(driver?.givenName || '').charAt(0)}. ${driver?.familyName || ''}`;
 const teamId = constructor => (constructor?.constructorId || '').replace(/\s+/g, '_').toLowerCase();
+const driverNumberKey = value => value == null || value === '' ? '' : String(value);
+const openF1DriverCode = driver => (
+  driver?.name_acronym ||
+  String(driver?.broadcast_name || driver?.last_name || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase()
+);
+const openF1DriverName = driver => (
+  driver?.full_name ||
+  driver?.broadcast_name ||
+  driver?.last_name ||
+  ''
+);
 
 function parseQualifying(data) {
   const race = getRaces(data).find(item => item?.QualifyingResults?.length) || null;
@@ -36,7 +47,7 @@ function parseQualifying(data) {
   };
 }
 
-function buildLatestSession(sessionData, weatherData, stintData, driverData, positionData) {
+function buildLatestSession(sessionData, weatherData, stintData, driverData, positionData, standingsDrivers = []) {
   const session = Array.isArray(sessionData) ? sessionData[0] : null;
   if (!session) return null;
 
@@ -51,15 +62,28 @@ function buildLatestSession(sessionData, weatherData, stintData, driverData, pos
 
   const drivers = new Map();
   for (const driver of Array.isArray(driverData) ? driverData : []) {
-    if (driver?.driver_number != null) drivers.set(driver.driver_number, driver);
+    const key = driverNumberKey(driver?.driver_number);
+    if (key) drivers.set(key, driver);
+  }
+  for (const driver of standingsDrivers) {
+    const key = driverNumberKey(driver?.permanent_number);
+    if (!key || drivers.has(key)) continue;
+    drivers.set(key, {
+      driver_number: key,
+      name_acronym: driver.code,
+      full_name: [driver.given_name, driver.family_name].filter(Boolean).join(' '),
+      broadcast_name: driver.short_name,
+      last_name: driver.family_name
+    });
   }
 
   const latestPositions = new Map();
   for (const position of Array.isArray(positionData) ? positionData : []) {
     if (position?.driver_number == null) continue;
-    const previous = latestPositions.get(position.driver_number);
+    const key = driverNumberKey(position.driver_number);
+    const previous = latestPositions.get(key);
     if (!previous || Date.parse(position.date || '') >= Date.parse(previous.date || '')) {
-      latestPositions.set(position.driver_number, position);
+      latestPositions.set(key, position);
     }
   }
 
@@ -67,11 +91,13 @@ function buildLatestSession(sessionData, weatherData, stintData, driverData, pos
   let maxLap = 1;
   for (const stint of Array.isArray(stintData) ? stintData : []) {
     if (stint?.driver_number == null) continue;
+    const key = driverNumberKey(stint.driver_number);
+    if (!key) continue;
     const lapStart = stint.lap_start || 1;
     const lapEnd = stint.lap_end || lapStart;
     maxLap = Math.max(maxLap, lapEnd);
-    if (!stintsByDriver.has(stint.driver_number)) stintsByDriver.set(stint.driver_number, []);
-    stintsByDriver.get(stint.driver_number).push({
+    if (!stintsByDriver.has(key)) stintsByDriver.set(key, []);
+    stintsByDriver.get(key).push({
       compound: (stint.compound || 'unknown').toLowerCase(),
       lap_start: lapStart,
       lap_end: lapEnd,
@@ -89,10 +115,12 @@ function buildLatestSession(sessionData, weatherData, stintData, driverData, pos
     total_laps: maxLap,
     drivers: rankedDrivers.map(number => {
       const driver = drivers.get(number);
+      const code = openF1DriverCode(driver);
+      const name = openF1DriverName(driver);
       return {
         num: number,
-        code: driver?.name_acronym || String(number),
-        driver: driver?.full_name || driver?.broadcast_name || driver?.last_name || `#${number}`,
+        code: code || String(number),
+        driver: name || `#${number}`,
         stints: stintsByDriver.get(number).sort((a, b) => a.lap_start - b.lap_start)
       };
     })
@@ -117,19 +145,14 @@ export default async function handler(req, res) {
     const openF1Headers = { accept: 'application/json' };
 
     const [
-      driversData, constructorsData, scheduleData, lastRaceData, winnersData,
-      sessionData, weatherData, stintData, openF1Drivers, positionData
+      driversData, constructorsData, scheduleData, lastRaceData, winnersData, sessionData
     ] = await Promise.all([
       fetchJson('https://api.jolpi.ca/ergast/f1/current/driverStandings.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/constructorStandings.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/last/results.json'),
       fetchJson('https://api.jolpi.ca/ergast/f1/current/results/1.json?limit=100'),
-      fetchJson('https://api.openf1.org/v1/sessions?session_key=latest', openF1Headers),
-      fetchJson('https://api.openf1.org/v1/weather?session_key=latest', openF1Headers),
-      fetchJson('https://api.openf1.org/v1/stints?session_key=latest', openF1Headers),
-      fetchJson('https://api.openf1.org/v1/drivers?session_key=latest', openF1Headers),
-      fetchJson('https://api.openf1.org/v1/position?session_key=latest', openF1Headers)
+      fetchJson('https://api.openf1.org/v1/sessions?session_key=latest', openF1Headers)
     ]);
 
     const driverList = getStandingsList(driversData).DriverStandings || [];
@@ -151,6 +174,18 @@ export default async function handler(req, res) {
         permanent_number: item.Driver?.permanentNumber || ''
       };
     });
+
+    const latestOpenF1Session = Array.isArray(sessionData) ? sessionData[0] : null;
+    const latestSessionKey = latestOpenF1Session?.session_key;
+    const openF1SessionQuery = latestSessionKey != null
+      ? `session_key=${encodeURIComponent(latestSessionKey)}`
+      : 'session_key=latest';
+    const [weatherData, stintData, openF1Drivers, positionData] = await Promise.all([
+      fetchJson(`https://api.openf1.org/v1/weather?${openF1SessionQuery}`, openF1Headers),
+      fetchJson(`https://api.openf1.org/v1/stints?${openF1SessionQuery}`, openF1Headers),
+      fetchJson(`https://api.openf1.org/v1/drivers?${openF1SessionQuery}`, openF1Headers),
+      fetchJson(`https://api.openf1.org/v1/position?${openF1SessionQuery}`, openF1Headers)
+    ]);
 
     const constructorList = getStandingsList(constructorsData).ConstructorStandings || [];
     const topConstructorPoints = parseFloat(constructorList[0]?.points) || 1;
@@ -191,7 +226,7 @@ export default async function handler(req, res) {
         : null
     ]);
     const qualifying = parseQualifying(nextRaceQualifying) || parseQualifying(lastRaceQualifying);
-    const latest_session = buildLatestSession(sessionData, weatherData, stintData, openF1Drivers, positionData);
+    const latest_session = buildLatestSession(sessionData, weatherData, stintData, openF1Drivers, positionData, drivers);
 
     let last_race = null;
     if (lastRace) {
